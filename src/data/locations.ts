@@ -37,13 +37,13 @@ export const locations: LocationDef[] = [
     id: 'la-concha-railing',
     name: 'La Concha',
     area: 'la-concha',
-    position: { x: -6.7, z: 3.5 },
+    position: { x: -11.3, z: 3.1 },
     interactRadius: 2.6,
     actionLabel: 'Lean on the railing',
     polaroidCaption: 'The whole bay, glowing. Nobody said anything for a minute.',
     shot: {
-      position: { x: -5.4, y: 4.6, z: 10.5 },
-      target: { x: -12, y: 1.2, z: -44 },
+      position: { x: -10, y: 4.6, z: 10.1 },
+      target: { x: -16.5, y: 1.2, z: -44 },
     },
     fact: {
       text: "La Concha's white promenade railing is one of the city's best-known symbols, and its curling pattern turns up on souvenirs all over town.",

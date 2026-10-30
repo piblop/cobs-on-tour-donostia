@@ -2,31 +2,39 @@ import './styles/main.css';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { validateContent, formatIssues } from './data/validate.ts';
-import { crew, playerDefaultId } from './data/crew.ts';
 import { locations } from './data/locations.ts';
-import type { LocationDef } from './data/types.ts';
-import { movement } from './data/tuning.ts';
+import { banter } from './data/banter.ts';
+import type { CrewId } from './data/types.ts';
 import { GameLoop } from './engine/loop.ts';
 import { GameState } from './engine/state.ts';
 import { Input, type Action } from './engine/input.ts';
 import { CameraRig } from './engine/camera.ts';
 import { Renderer } from './engine/renderer.ts';
 import { events } from './engine/events.ts';
+import { SettingsStore, type Settings } from './engine/settings.ts';
+import { AudioEngine, type Surface } from './engine/audio.ts';
 import { createScenery, PALETTE, type Scenery } from './world/scenery.ts';
 import { createBuildings } from './world/buildings.ts';
 import { buildCollisionWorld, type CollisionWorld } from './world/collisions.ts';
-import { groundY, spawnPoint } from './world/map.ts';
-import { Interactables, areaAt } from './world/locations.ts';
-import { Character } from './crew/character.ts';
-import { createMover, stepMovement, type MoverState } from './crew/controller.ts';
+import { BAY_EAST, BAY_WEST, groundY, projectToShore, spawnPoint, type Prop } from './world/map.ts';
+import { Interactables, areaAt, type Spot } from './world/locations.ts';
+import { DayNight, clockRate, formatClock } from './world/dayNight.ts';
+import { Crew } from './crew/crew.ts';
+import { BanterDirector, PRIORITY, type BanterContextInfo } from './crew/banter.ts';
+import { Memories } from './crew/memories.ts';
+import { Needs } from './crew/needs.ts';
+import { Vibe } from './crew/vibe.ts';
 import { installPaperTexture } from './ui/paper.ts';
 import { showTitle, type TitleScreen } from './ui/title.ts';
 import { Hud } from './ui/hud.ts';
+import { Bubbles } from './ui/bubbles.ts';
 import { showPolaroid, type PolaroidCard } from './ui/discovery.ts';
 import { showPause, type PauseMenu } from './ui/pause.ts';
+import { settingsPanel } from './ui/settings.ts';
 import { showFatal } from './ui/fatal.ts';
 import { h } from './ui/dom.ts';
 import type { PerfOverlay } from './engine/perfOverlay.ts';
+import type { LocationDef } from './data/types.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -47,15 +55,31 @@ function webglAvailable(): boolean {
   }
 }
 
-function wrapAngle(a: number): number {
-  return Math.atan2(Math.sin(a), Math.cos(a));
+interface Systems {
+  ui: HTMLElement;
+  scene: THREE.Scene;
+  renderer: Renderer;
+  rig: CameraRig;
+  input: Input;
+  world: CollisionWorld;
+  scenery: Scenery;
+  interactables: Interactables;
+  crew: Crew;
+  dayNight: DayNight;
+  settings: SettingsStore;
 }
 
 class Game {
   readonly state = new GameState();
-  private mover: MoverState;
-  private prev = { x: 0, z: 0, heading: 0 };
-  private renderPos = new THREE.Vector3();
+  private s: Systems;
+  private audio = new AudioEngine();
+  private banter: BanterDirector;
+  private memories = new Memories();
+  private needs = new Map<CrewId, Needs>();
+  private vibe = new Vibe();
+  private bubbles: Bubbles;
+  private hud: Hud;
+  private fade: HTMLElement;
   private anchor = new THREE.Vector3();
   private discovered = new Set<string>();
   private currentArea: string | null = null;
@@ -67,156 +91,330 @@ class Game {
   private cardDone: (() => void) | null = null;
   private movedSinceStart = 0;
   private hintHidden = false;
-  private hud: Hud;
-  private fade: HTMLElement;
-  private reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private reducedMotion = false;
+  private needCheck = 0;
+  private hudTimer = 0;
+  private idleAtRailing = 0;
+  private sunsetDay = 0;
+  private walked = 0;
+  private benchSatThisSit = false;
+  private lastSettings: Settings | null = null;
   perf: PerfOverlay | null = null;
 
-  constructor(
-    private ui: HTMLElement,
-    private scene: THREE.Scene,
-    private renderer: Renderer,
-    private rig: CameraRig,
-    private input: Input,
-    private world: CollisionWorld,
-    private scenery: Scenery,
-    private interactables: Interactables,
-    private friend: Character,
-  ) {
-    const p = spawnPoint();
-    this.mover = createMover(p.x, p.z, Math.PI);
-    this.syncPrev();
-    this.rig.reducedMotion = this.reducedMotion;
-    this.hud = new Hud(ui);
-    this.hud.reducedMotion = this.reducedMotion;
+  constructor(s: Systems) {
+    this.s = s;
+    this.hud = new Hud(s.ui);
     this.hud.setVisible(false);
     this.hud.setCount(0, locations.length);
+    this.bubbles = new Bubbles(s.ui);
     this.fade = h('div', { class: 'fade', attrs: { 'aria-hidden': 'true' } });
     document.body.append(this.fade);
-    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
-      this.reducedMotion = e.matches;
-      this.rig.reducedMotion = e.matches;
-      this.hud.reducedMotion = e.matches;
-    });
-    this.placeFriend(1);
-    this.rig.snapTo(this.mover.x, groundY(this.mover.x, this.mover.z), this.mover.z);
+    for (const m of s.crew.members) this.needs.set(m.def.id, new Needs(m.def));
+
+    this.banter = new BanterDirector(banter);
+    this.banter.onSay = (e) => {
+      const m = s.crew.byId(e.speaker);
+      if (!m) return;
+      this.bubbles.say(e.speaker, m.def.name, m.def.colors.top, e.text, e.duration, {
+        day: s.dayNight.day,
+        time: formatClock(s.dayNight.hour),
+      });
+    };
+    this.banter.onEnd = (id) => {
+      const line = banter.find((l) => l.id === id);
+      if (line && line.beats.length > 1) this.vibe.add('funny');
+    };
+
+    s.crew.onRecover = (id) => this.say('recover', PRIORITY.ambient, id as CrewId, 60);
+    s.crew.onInvestigate = (id) => this.say('investigate', PRIORITY.ambient, id as CrewId, 25);
+    s.crew.pointsOfInterest = s.interactables.pointsOfInterest();
+    s.dayNight.onPhase = (phase) => this.say(`time:${phase}`, PRIORITY.ambient, undefined, 0);
+    s.crew.leader.character.onStep = () => this.footstep();
+
+    s.settings.subscribe((v) => this.applySettings(v));
+    const lead = s.crew.leader;
+    s.rig.snapTo(lead.mover.x, groundY(lead.mover.x, lead.mover.z), lead.mover.z);
   }
 
-  private syncPrev(): void {
-    this.prev.x = this.mover.x;
-    this.prev.z = this.mover.z;
-    this.prev.heading = this.mover.heading;
+  // --- Settings ---------------------------------------------------------------
+
+  private applySettings(v: Settings): void {
+    const s = this.s;
+    this.reducedMotion = s.settings.reducedMotion;
+    document.documentElement.style.setProperty('--text-scale', String(v.textScale));
+    s.rig.reducedMotion = this.reducedMotion;
+    this.hud.reducedMotion = this.reducedMotion;
+    this.bubbles.reducedMotion = this.reducedMotion;
+    this.hud.setHighContrast(v.highContrastPrompts);
+    this.bubbles.captionBar = v.captionBar;
+    this.banter.readingScale = v.relaxedTiming ? 1.35 : 1;
+    this.audio.applySettings(v);
+    const prev = this.lastSettings;
+    if (!prev || prev.quality !== v.quality || prev.resolutionScale !== v.resolutionScale) {
+      s.renderer.apply({ quality: v.quality, resolutionScale: v.resolutionScale });
+    }
+    this.lastSettings = v;
+  }
+
+  // --- Helpers ------------------------------------------------------------------
+
+  private banterInfo(subject?: CrewId): BanterContextInfo {
+    const c = this.s.crew;
+    return {
+      leader: c.leader.def.id,
+      present: c.members.map((m) => m.def.id),
+      subject,
+      hasMemory: (k) => this.memories.has(k),
+    };
+  }
+
+  private say(context: string, priority: number, subject?: CrewId, cooldown = 30): boolean {
+    if (!this.state.gameplayActive && priority < PRIORITY.important) return false;
+    return this.banter.trigger(context, this.banterInfo(subject), priority, cooldown);
+  }
+
+  private remember(key: string, summary: string, where?: string): void {
+    const dn = this.s.dayNight;
+    this.memories.record({
+      key,
+      summary,
+      where: where ?? (this.currentArea ? (areaAt(this.s.crew.leader.mover.x, this.s.crew.leader.mover.z)?.name ?? 'Donostia') : 'Donostia'),
+      day: dn.day,
+      hour: dn.hour,
+      who: this.s.crew.members.map((m) => m.def.id),
+    });
+  }
+
+  private surfaceUnderLeader(): Surface {
+    const m = this.s.crew.leader.mover;
+    if (groundY(m.x, m.z) < 1) return 'sand';
+    if (this.currentArea === 'alderdi-eder' && m.z < 9.5 && m.x < 53) return 'grass';
+    return 'stone';
+  }
+
+  private footstep(): void {
+    if (this.state.gameplayActive) this.audio.footstep(this.surfaceUnderLeader());
   }
 
   // --- Simulation (fixed 60 Hz) ---------------------------------------------
 
   step = (dt: number): void => {
     if (!this.state.simulationRunning) return;
-    this.syncPrev();
+    const s = this.s;
+    const crew = s.crew;
     let intent = { x: 0, z: 0, brisk: false };
     if (this.state.gameplayActive) {
-      const raw = this.input.move();
-      const w = this.rig.screenToWorld(raw.x, raw.z);
-      intent = { x: w.x, z: w.z, brisk: raw.brisk };
-    }
-    stepMovement(this.mover, intent, dt, this.world);
-    if (this.faceTarget !== null && !this.state.gameplayActive) {
-      const diff = wrapAngle(this.faceTarget - this.mover.heading);
-      this.mover.heading = wrapAngle(this.mover.heading + diff * (1 - Math.exp(-7 * dt)));
-    }
-    if (this.state.gameplayActive) {
-      this.movedSinceStart += Math.hypot(this.mover.vx, this.mover.vz) * dt;
-      const area = areaAt(this.mover.x, this.mover.z);
-      if (area && area.id !== this.currentArea) {
-        this.currentArea = area.id;
-        this.hud.showArea(area.name, area.subtitle);
-        events.emit('area:entered', { id: area.id, name: area.name, subtitle: area.subtitle });
+      const raw = s.input.move();
+      if (crew.seated) {
+        // Any real push on the stick or keys stands everyone up.
+        if (Math.hypot(raw.x, raw.z) > 0.5) this.standUp();
+      } else {
+        const w = s.rig.screenToWorld(raw.x, raw.z);
+        intent = { x: w.x, z: w.z, brisk: raw.brisk };
       }
     }
+    const allowFollowers = this.state.gameplayActive;
+    crew.step(dt, intent, allowFollowers, this.faceTarget);
+    if (!this.state.gameplayActive) return;
+
+    const lead = crew.leader.mover;
+    const speed = Math.hypot(lead.vx, lead.vz);
+    this.movedSinceStart += speed * dt;
+    this.walked += speed * dt;
+
+    // The clock only runs while exploring.
+    const gameHours = (dt * clockRate(s.dayNight.hour)) / 60;
+    s.dayNight.advance(dt);
+    for (const n of this.needs.values()) n.tick(gameHours, s.dayNight.hour, crew.seated ? 0 : speed * dt);
+    this.vibe.drift(gameHours);
+    if (crew.seated) for (const n of this.needs.values()) n.rest(dt * 0.02);
+
+    const area = areaAt(lead.x, lead.z);
+    if (area && area.id !== this.currentArea) {
+      this.currentArea = area.id;
+      this.hud.showArea(area.name, area.subtitle);
+      events.emit('area:entered', { id: area.id, name: area.name, subtitle: area.subtitle });
+      this.say(`area:${area.id}`, PRIORITY.ambient, undefined, 40);
+    }
+    this.checkSunset(dt, speed);
   };
+
+  /** A once-a-day moment: standing by the railing as the sun goes down. */
+  private checkSunset(dt: number, speed: number): void {
+    const dn = this.s.dayNight;
+    if (this.sunsetDay === dn.day || dn.hour < 19.2 || dn.hour > 20.8) {
+      this.idleAtRailing = 0;
+      return;
+    }
+    const lead = this.s.crew.leader.mover;
+    const { x0, d } = projectToShore(lead.x, lead.z);
+    const atRailing = x0 > BAY_WEST && x0 < BAY_EAST && d > 8.8 && d < 13;
+    this.idleAtRailing = atRailing && speed < 0.3 ? this.idleAtRailing + dt : 0;
+    if (this.idleAtRailing > 3.5) {
+      this.sunsetDay = dn.day;
+      this.vibe.add('sunset');
+      this.remember('watched:sunset', 'Watched the sun go down over La Concha', 'La Concha');
+      this.banter.interrupt();
+      this.say('sunset', PRIORITY.moment, undefined, 0);
+    }
+  }
 
   // --- Rendering (every display frame) ---------------------------------------
 
   render = (alpha: number, frameDt: number): void => {
-    this.input.pollGamepad();
-    for (const action of this.input.consume()) this.handle(action);
+    const s = this.s;
+    s.input.pollGamepad();
+    for (const action of s.input.consume()) this.handle(action);
 
     if (this.state.gameplayActive) {
-      const rot = this.input.cameraRotate();
-      this.rig.rotate(rot.rate, rot.drag, frameDt);
-      const zoom = this.input.zoom();
-      if (zoom) this.rig.addZoom(zoom);
+      const rot = s.input.cameraRotate();
+      s.rig.rotate(rot.rate, rot.drag, frameDt);
+      const zoom = s.input.zoom();
+      if (zoom) s.rig.addZoom(zoom);
     } else {
-      this.input.cameraRotate();
-      this.input.zoom();
+      s.input.cameraRotate();
+      s.input.zoom();
     }
 
-    if (this.state.name !== 'menu') this.decorTime += frameDt;
-    this.placeFriend(alpha);
-    const speed = this.state.simulationRunning ? Math.hypot(this.mover.vx, this.mover.vz) : 0;
-    this.friend.animate(this.state.name === 'menu' ? 0 : frameDt, speed, movement.walkSpeed, this.reducedMotion);
-    this.rig.update(this.renderPos, frameDt);
-    // Behind the title card: a slow postcard view out across the bay and sky.
+    const frozen = this.state.name === 'menu';
+    if (!frozen) this.decorTime += frameDt;
+    s.crew.interpolate(alpha);
+    s.crew.animate(frameDt, this.reducedMotion, frozen);
+    const leadPos = s.crew.leader.renderPos;
+    s.rig.update(leadPos, frameDt);
     const onTitle = this.state.name === 'title';
-    if (onTitle) this.rig.titleView(this.decorTime, this.reducedMotion);
-    this.interactables.group.visible = !onTitle;
-    this.followSun();
-    this.scenery.update(this.decorTime);
-    this.interactables.update(this.decorTime, this.reducedMotion);
+    if (onTitle) s.rig.titleView(this.decorTime, this.reducedMotion);
+    s.interactables.group.visible = !onTitle;
+    s.dayNight.apply();
+    s.dayNight.followLight(leadPos.x, leadPos.z);
+    s.scenery.update(this.decorTime);
+    s.interactables.update(this.decorTime, this.reducedMotion);
     this.updatePrompt();
+
+    if (this.state.gameplayActive) {
+      this.banter.update(frameDt, this.idleContexts(), this.banterInfo());
+      this.needCheck -= frameDt;
+      if (this.needCheck <= 0) {
+        this.needCheck = 8;
+        this.checkNeeds();
+      }
+      if (this.vibe.checkHigh()) this.celebrate();
+    }
+    this.bubbles.update(frozen ? 0 : frameDt, (id) => this.headAnchor(id));
+    this.updateAudio(frameDt);
+    this.hudTimer -= frameDt;
+    if (this.hudTimer <= 0) {
+      this.hudTimer = 0.25;
+      this.updateHud();
+    }
 
     if (!this.hintHidden && this.movedSinceStart > 6) {
       this.hintHidden = true;
       this.hud.hideHint();
     }
 
-    const info = this.renderer.info;
+    const info = s.renderer.info;
     info.reset();
-    this.renderer.render();
-    this.perf?.update(frameDt, info, this.scene);
+    s.renderer.render();
+    this.perf?.update(frameDt, info, s.scene);
   };
 
-  private placeFriend(alpha: number): void {
-    const x = this.prev.x + (this.mover.x - this.prev.x) * alpha;
-    const z = this.prev.z + (this.mover.z - this.prev.z) * alpha;
-    const heading = this.prev.heading + wrapAngle(this.mover.heading - this.prev.heading) * alpha;
-    this.renderPos.set(x, groundY(x, z), z);
-    this.friend.root.position.copy(this.renderPos);
-    this.friend.root.rotation.y = heading;
+  private idleContexts(): string[] {
+    const list = ['callback', `time:${this.s.dayNight.phaseName}`];
+    if (this.currentArea) list.push(`area:${this.currentArea}`);
+    list.push('idle');
+    return list;
   }
 
-  private followSun(): void {
-    const sun = this.scenery.sun;
-    // Snap to a coarse grid so shadow texels don't shimmer while walking.
-    const fx = Math.round(this.renderPos.x * 2) / 2;
-    const fz = Math.round(this.renderPos.z * 2) / 2;
-    sun.target.position.set(fx, 0, fz);
-    // Low golden sun from the north-west, over the bay, so the facades glow.
-    sun.position.set(fx - 40, 48, fz - 58);
-    sun.target.updateMatrixWorld();
+  private checkNeeds(): void {
+    const abs = this.s.dayNight.day * 24 + this.s.dayNight.hour;
+    for (const [id, n] of this.needs) {
+      const kind = n.suggestion(abs);
+      if (!kind) continue;
+      if (this.say(`need:${kind}`, PRIORITY.need, id, 45)) {
+        n.markNagged(kind, abs);
+        return;
+      }
+    }
+  }
+
+  private celebrate(): void {
+    this.say('vibe:high', PRIORITY.moment, undefined, 0);
+    this.audio.ui('cheer');
+    for (const m of this.s.crew.members) {
+      m.character.hop(0.45);
+      m.character.cheering = 1.6;
+    }
+  }
+
+  private headAnchor(id: CrewId): { x: number; y: number } | null {
+    const m = this.s.crew.byId(id);
+    if (!m) return null;
+    this.anchor.copy(m.renderPos);
+    this.anchor.y += m.character.seated ? 2.7 : 3.4;
+    this.anchor.project(this.s.rig.camera);
+    if (this.anchor.z > 1 || Math.abs(this.anchor.x) > 1.2 || Math.abs(this.anchor.y) > 1.2) return null;
+    return { x: (this.anchor.x * 0.5 + 0.5) * window.innerWidth, y: (-this.anchor.y * 0.5 + 0.5) * window.innerHeight };
+  }
+
+  private updateAudio(dt: number): void {
+    if (!this.audio.started) return;
+    const lead = this.s.crew.leader.mover;
+    let surf = 0.3;
+    if (lead.x < BAY_EAST + 6) {
+      const { d } = projectToShore(lead.x, lead.z);
+      surf = Math.min(1, Math.max(0, 1 - (d - 2) / 24));
+    }
+    const crowd = this.currentArea === 'parte-vieja' ? 1 : this.currentArea === 'alderdi-eder' ? 0.3 : 0.05;
+    const wind = groundY(lead.x, lead.z) < 1 ? 0.6 : 0.3;
+    this.audio.update({ surf, crowd, wind, night: this.s.dayNight.night }, dt);
+  }
+
+  private updateHud(): void {
+    const s = this.s;
+    this.hud.setClock(s.dayNight.day, formatClock(s.dayNight.hour), s.dayNight.night > 0.5);
+    this.hud.setVibe(this.vibe.value, this.vibe.label);
+    this.hud.setCrew(
+      s.crew.members.map((m, i) => ({
+        id: m.def.id,
+        name: m.def.name,
+        colour: m.def.colors.top,
+        leader: i === s.crew.leaderIndex,
+        need: this.needs.get(m.def.id)?.status() ?? null,
+      })),
+    );
   }
 
   private updatePrompt(): void {
+    const s = this.s;
     if (!this.state.gameplayActive) {
-      this.interactables.setActive(null);
+      s.interactables.setActive(null);
       this.hud.setPrompt(null, null, '');
       return;
     }
-    const loc = this.interactables.nearest(this.mover.x, this.mover.z);
-    this.interactables.setActive(loc?.id ?? null);
-    if (!loc) {
+    const key = s.input.device === 'gamepad' ? 'A' : 'E';
+    const lead = s.crew.leader;
+    if (s.crew.seated) {
+      s.interactables.setActive(null);
+      this.anchor.copy(lead.renderPos).setY(lead.renderPos.y + 3.6).project(s.rig.camera);
+      this.hud.setPrompt('Stand up', { x: (this.anchor.x * 0.5 + 0.5) * window.innerWidth, y: (-this.anchor.y * 0.5 + 0.5) * window.innerHeight }, key);
+      return;
+    }
+    const spot = s.interactables.nearest(lead.mover.x, lead.mover.z);
+    s.interactables.setActive(spot?.id ?? null);
+    if (!spot) {
       this.hud.setPrompt(null, null, '');
       return;
     }
-    this.interactables.promptAnchor(loc.id, this.anchor).project(this.rig.camera);
+    s.interactables.promptAnchor(spot.id, this.anchor).project(s.rig.camera);
     if (this.anchor.z > 1) {
       this.hud.setPrompt(null, null, '');
       return;
     }
     const x = (this.anchor.x * 0.5 + 0.5) * window.innerWidth;
     const y = (-this.anchor.y * 0.5 + 0.5) * window.innerHeight;
-    const label = this.discovered.has(loc.id) ? `${loc.actionLabel} again` : loc.actionLabel;
-    this.hud.setPrompt(label, { x, y }, this.input.device === 'gamepad' ? 'A' : 'E');
+    const label = spot.kind === 'discovery' && this.discovered.has(spot.id) ? `${spot.label} again` : spot.label;
+    this.hud.setPrompt(label, { x, y }, key);
   }
 
   // --- Actions ----------------------------------------------------------------
@@ -231,22 +429,21 @@ class Game {
       this.perf?.toggle();
       return;
     }
+    const s = this.s;
     switch (this.state.name) {
       case 'title':
         if (action === 'up') this.title?.nav(-1);
         else if (action === 'down') this.title?.nav(1);
-        else if (action === 'interact' && this.input.device === 'gamepad') this.clickFocused();
+        else if (action === 'interact' && s.input.device === 'gamepad') this.clickFocused();
         break;
       case 'exploring':
         if (action === 'pause') this.openPause();
-        else if (action === 'resetCamera') this.rig.resetView();
-        else if (action === 'interact' || action === 'confirm') {
-          const loc = this.interactables.nearest(this.mover.x, this.mover.z);
-          if (loc) void this.discover(loc);
-        }
+        else if (action === 'resetCamera') s.rig.resetView();
+        else if (action === 'switchFriend') this.switchFriend();
+        else if (action === 'interact' || action === 'confirm') this.interact();
         break;
       case 'cinematic':
-        if (action === 'interact' || action === 'confirm' || action === 'pause' || action === 'back') this.rig.skip();
+        if (action === 'interact' || action === 'confirm' || action === 'pause' || action === 'back') s.rig.skip();
         break;
       case 'card':
         if (action === 'interact' || action === 'pause' || action === 'back') this.cardDone?.();
@@ -256,52 +453,97 @@ class Game {
           if (!this.pause?.back()) void this.closePause();
         } else if (action === 'up') this.pause?.nav(-1);
         else if (action === 'down') this.pause?.nav(1);
-        else if (action === 'interact' && this.input.device === 'gamepad') this.clickFocused();
+        else if (action === 'interact' && s.input.device === 'gamepad') this.clickFocused();
         break;
       default:
         break;
     }
   }
 
+  private interact(): void {
+    const s = this.s;
+    if (s.crew.seated) {
+      this.standUp();
+      return;
+    }
+    const spot = s.interactables.nearest(s.crew.leader.mover.x, s.crew.leader.mover.z);
+    if (!spot) return;
+    if (spot.kind === 'discovery') void this.discover(spot.loc);
+    else void this.sit(spot);
+  }
+
+  private switchFriend(): void {
+    const s = this.s;
+    if (s.crew.seated) return;
+    s.crew.leader.character.onStep = null;
+    const lead = s.crew.switchLeader();
+    lead.character.onStep = () => this.footstep();
+    lead.character.hop(0.3);
+    this.audio.ui('switch');
+    this.hud.announce(`You are now ${lead.def.name}.`);
+    const key = `led:${lead.def.id}`;
+    if (!this.memories.has(key)) this.remember(key, `${lead.def.name} took the lead`);
+    this.banter.interrupt();
+    this.say(`switch:${lead.def.id}`, PRIORITY.moment, lead.def.id, 0);
+    this.updateHud();
+  }
+
   // --- Flow -------------------------------------------------------------------
+
+  private settingsFor = (onDone: () => void): HTMLElement => settingsPanel(this.s.settings, onDone);
 
   showTitleScreen(): void {
     this.hud.setVisible(false);
+    this.bubbles.clear();
     this.state.set('title');
-    this.title = showTitle(this.ui, () => void this.startTrip(), this.reducedMotion);
+    this.title = showTitle(this.s.ui, () => void this.startTrip(), this.reducedMotion, this.settingsFor);
   }
 
   private async startTrip(): Promise<void> {
     if (this.state.name !== 'title' || !this.title) return;
+    const s = this.s;
+    // The click on "Start Trip" is the user gesture that unlocks audio.
+    this.audio.start();
+    this.audio.applySettings(s.settings.current);
+    this.audio.ui('open');
     const title = this.title;
     this.title = null;
-    this.rig.resetView();
-    // Sweep from the postcard view down to the crew while the card fades.
+    s.rig.resetView();
     this.state.set('cinematic');
-    const glide = this.rig.glideFromCurrent(this.reducedMotion ? 0.3 : 1.8);
+    const glide = s.rig.glideFromCurrent(this.reducedMotion ? 0.3 : 1.8);
     await title.close();
     await glide;
     this.state.set('exploring');
-    this.renderer.canvas.focus({ preventScroll: true });
+    s.renderer.canvas.focus({ preventScroll: true });
     this.hud.setVisible(true);
-    this.hud.showHint(this.input.device);
-    const area = areaAt(this.mover.x, this.mover.z);
+    this.hud.showHint(s.input.device);
+    this.updateHud();
+    const lead = s.crew.leader.mover;
+    const area = areaAt(lead.x, lead.z);
     if (area) {
       this.currentArea = area.id;
       this.hud.showArea(area.name, area.subtitle);
     }
+    s.dayNight.apply();
+    window.setTimeout(() => this.say(`time:${s.dayNight.phaseName}`, PRIORITY.ambient, undefined, 0), 2500);
   }
 
   private async discover(loc: LocationDef): Promise<void> {
+    const s = this.s;
     const firstTime = !this.discovered.has(loc.id);
+    this.banter.interrupt();
+    this.bubbles.clear();
     this.state.set('cinematic');
-    this.faceTarget = Math.atan2(loc.shot.target.x - this.mover.x, loc.shot.target.z - this.mover.z);
-    this.friend.hop(firstTime ? 0.6 : 0.35);
-    await this.rig.glideTo(loc.shot, firstTime ? undefined : 0.6);
-    if (this.state.name !== 'cinematic') return; // recovered or paused away
-    this.renderer.setTiltShift(0.35);
-    const photo = this.renderer.snapshot();
-    this.renderer.setTiltShift(1);
+    this.audio.setDucked(true);
+    const lead = s.crew.leader.mover;
+    this.faceTarget = Math.atan2(loc.shot.target.x - lead.x, loc.shot.target.z - lead.z);
+    for (const m of s.crew.members) m.character.hop(firstTime ? 0.6 : 0.35);
+    if (firstTime) this.audio.ui('discover');
+    await s.rig.glideTo(loc.shot, firstTime ? undefined : 0.6);
+    if (this.state.name !== 'cinematic') return;
+    s.renderer.setTiltShift(0.35);
+    const photo = s.renderer.snapshot();
+    s.renderer.setTiltShift(1);
     this.state.set('card');
     await new Promise<void>((resolve) => {
       let done = false;
@@ -310,35 +552,67 @@ class Game {
         done = true;
         resolve();
       };
-      this.card = showPolaroid(this.ui, loc, photo, firstTime, () => this.cardDone?.(), this.reducedMotion);
+      this.card = showPolaroid(s.ui, loc, photo, firstTime, () => this.cardDone?.(), this.reducedMotion);
     });
     this.cardDone = null;
     const card = this.card;
     this.card = null;
+    this.audio.ui('close');
     await card?.close();
     if (firstTime) {
       this.discovered.add(loc.id);
-      this.interactables.markDiscovered(loc.id);
+      s.interactables.markDiscovered(loc.id);
       this.hud.setCount(this.discovered.size, locations.length);
       this.hud.announce(`${loc.name} added to the journal.`);
+      this.vibe.add('discovery');
+      for (const n of this.needs.values()) n.enjoy(0.35);
+      this.remember(`discovered:${loc.id}`, `Discovered ${loc.name}`, loc.name);
     }
     events.emit('location:discovered', { id: loc.id, firstTime });
     this.state.set('cinematic');
-    await this.rig.returnToFollow();
+    await s.rig.returnToFollow();
     this.faceTarget = null;
+    this.audio.setDucked(false);
     this.state.set('exploring');
-    this.renderer.canvas.focus({ preventScroll: true });
+    s.renderer.canvas.focus({ preventScroll: true });
+    if (firstTime) window.setTimeout(() => this.say(`discover:${loc.id}`, PRIORITY.moment, undefined, 0), 600);
+  }
+
+  private async sit(spot: Extract<Spot, { kind: 'bench' }>): Promise<void> {
+    const bench: Prop = spot.bench;
+    this.banter.interrupt();
+    await gsap.to(this.fade, { opacity: 0.85, duration: this.reducedMotion ? 0.05 : 0.25 });
+    this.s.crew.sitAt(bench);
+    this.benchSatThisSit = false;
+    await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.35 });
+    this.audio.ui('open');
+    if (!this.benchSatThisSit) {
+      this.benchSatThisSit = true;
+      this.vibe.add('rest');
+      if (!this.memories.has('sat:bench')) this.remember('sat:bench', 'Sat together on a bench by the bay');
+      this.say('bench', PRIORITY.moment, undefined, 0);
+    }
+  }
+
+  private standUp(): void {
+    if (!this.s.crew.seated) return;
+    this.s.crew.standUp();
+    this.audio.ui('close');
   }
 
   private openPause(): void {
     this.state.set('menu');
-    this.input.clear();
+    this.s.input.clear();
+    this.audio.setDucked(true);
+    this.audio.ui('open');
     this.pause = showPause(
-      this.ui,
+      this.s.ui,
       {
         resume: () => void this.closePause(),
         returnToPromenade: () => void this.returnToPromenade(),
         toTitle: () => void this.backToTitle(),
+        settings: this.settingsFor,
+        history: () => this.bubbles.history,
       },
       this.reducedMotion,
     );
@@ -347,43 +621,52 @@ class Game {
   private async closePause(): Promise<void> {
     const menu = this.pause;
     this.pause = null;
+    this.audio.ui('close');
     await menu?.close();
+    this.audio.setDucked(false);
     if (this.state.name === 'menu') this.state.set('exploring');
-    this.renderer.canvas.focus({ preventScroll: true });
+    this.s.renderer.canvas.focus({ preventScroll: true });
   }
 
   /** Safe recovery: put the crew back on the promenade without touching progress. */
   private async returnToPromenade(): Promise<void> {
+    const s = this.s;
     const menu = this.pause;
     this.pause = null;
     await menu?.close();
-    this.rig.cancelCinematic();
+    s.rig.cancelCinematic();
+    this.banter.interrupt();
+    this.bubbles.clear();
     await gsap.to(this.fade, { opacity: 1, duration: this.reducedMotion ? 0.05 : 0.3 });
     const p = spawnPoint();
-    Object.assign(this.mover, { x: p.x, z: p.z, vx: 0, vz: 0, heading: Math.PI });
-    this.syncPrev();
+    s.crew.teleport(p.x, p.z, Math.PI);
     this.faceTarget = null;
-    this.rig.snapTo(p.x, groundY(p.x, p.z), p.z);
-    this.rig.resetView();
+    s.rig.snapTo(p.x, groundY(p.x, p.z), p.z);
+    s.rig.resetView();
+    this.audio.setDucked(false);
     this.state.set('exploring');
     await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.4 });
-    this.renderer.canvas.focus({ preventScroll: true });
+    s.renderer.canvas.focus({ preventScroll: true });
   }
 
   private async backToTitle(): Promise<void> {
     const menu = this.pause;
     this.pause = null;
     await menu?.close();
+    this.audio.setDucked(false);
     this.showTitleScreen();
   }
 
   onVisibility = (visible: boolean): void => {
+    this.audio.setHidden(!visible);
     if (!visible) {
-      this.input.clear();
+      this.s.input.clear();
       // Hidden mid-walk: stop cleanly so returning never lurches.
-      this.mover.vx = 0;
-      this.mover.vz = 0;
-      this.syncPrev();
+      for (const m of this.s.crew.members) {
+        m.mover.vx = 0;
+        m.mover.vz = 0;
+      }
+      this.s.crew.syncPrev();
     }
   };
 
@@ -421,6 +704,7 @@ async function boot(): Promise<void> {
     return;
   }
   installPaperTexture();
+  const settings = new SettingsStore();
 
   const stage = document.getElementById('stage')!;
   const ui = document.getElementById('ui')!;
@@ -440,6 +724,12 @@ async function boot(): Promise<void> {
   await progress(0.4, 'Pouring the sea');
   const scenery = createScenery();
   scene.add(scenery.group);
+  const dayNight = new DayNight(scenery, scene, renderer.renderer, 17.6);
+  if (import.meta.env.DEV) {
+    // Dev only: ?hour=21.5 starts at a chosen time for checking lighting.
+    const hour = Number(new URLSearchParams(location.search).get('hour'));
+    if (Number.isFinite(hour) && hour > 0) dayNight.setTime(hour);
+  }
 
   await progress(0.6, 'Laying the promenade');
   const world = buildCollisionWorld();
@@ -447,14 +737,14 @@ async function boot(): Promise<void> {
   scene.add(interactables.group);
 
   await progress(0.72, 'Waking the crew');
-  const member = crew.find((c) => c.id === playerDefaultId)!;
-  const friend = new Character(member);
-  scene.add(friend.root);
+  const spawn = spawnPoint();
+  const crew = new Crew(scene, world, spawn, Math.PI);
 
   const input = new Input(renderer.canvas);
-  game = new Game(ui, scene, renderer, rig, input, world, scenery, interactables, friend);
+  game = new Game({ ui, scene, renderer, rig, input, world, scenery, interactables, crew, dayNight, settings });
 
   await progress(0.85, 'Warming up the shaders');
+  dayNight.apply();
   // Compile every material now so the first walk never stutters.
   await renderer.renderer.compileAsync(scene, rig.camera);
 

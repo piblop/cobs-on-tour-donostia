@@ -64,6 +64,9 @@ export class Input {
     const target = e.target as HTMLElement | null;
     const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
     if (typing) return;
+    // Inside a dialog, Tab moves focus as usual; it only switches friends during play.
+    const inDialog = !!target?.closest?.('[role="dialog"]');
+    if (e.code === 'Tab' && inDialog) return;
     if (e.code === 'Tab' || e.code === 'F3') e.preventDefault();
     if (MOVE_KEYS[e.code] || e.code === 'Space') {
       // Don't scroll the page; but let Space activate a focused button.

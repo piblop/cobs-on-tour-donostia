@@ -23,3 +23,16 @@ describe('content tables', () => {
     }
   });
 });
+
+describe('usable spots', () => {
+  it('keep benches reachable and clear of discoveries', async () => {
+    const { Interactables } = await import('../../src/world/locations.ts');
+    const world = buildCollisionWorld();
+    const spots = new Interactables().spots;
+    const discoveries = spots.filter((s) => s.kind === 'discovery');
+    for (const b of spots.filter((s) => s.kind === 'bench')) {
+      expect(world.isFree(b.x, b.z, 0.34), b.id).toBe(true);
+      for (const d of discoveries) expect(Math.hypot(b.x - d.x, b.z - d.z), `${b.id} vs ${d.id}`).toBeGreaterThan(b.radius + d.radius);
+    }
+  });
+});

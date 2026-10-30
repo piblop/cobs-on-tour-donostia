@@ -398,8 +398,8 @@ kbd {
 
 .pause-hint {
   position: fixed;
-  top: 18px;
-  left: 18px;
+  top: 72px;
+  right: 18px;
   font-size: 1rem;
   padding: 0.35rem 0.75rem;
   pointer-events: none;
@@ -603,5 +603,354 @@ kbd {
   }
   .hint {
     bottom: 70px;
+  }
+}
+
+/* --- Status: clock and vibe -------------------------------------------------- */
+.status {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.55rem 0.85rem;
+  min-width: 11rem;
+  pointer-events: none;
+  transform: rotate(-0.8deg);
+  font-weight: 700;
+}
+
+.clock {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #ffe2a8;
+  color: #9a5b12;
+}
+
+.clock-icon.night {
+  background: #2e3f72;
+  color: #fff4d6;
+}
+
+.vibe {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+}
+
+.vibe-word {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.vibe-meter {
+  position: relative;
+  width: 4.5rem;
+  height: 0.55rem;
+  border-radius: 99px;
+  background: #eadfcb;
+  overflow: hidden;
+}
+
+.vibe-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f2c14e, #e86f8e);
+  transition: width 600ms var(--ease);
+}
+
+.vibe-label {
+  font-family: var(--hand);
+  color: var(--accent-dark);
+}
+
+/* --- Crew chips ------------------------------------------------------------------ */
+.crew-row {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+
+.crew-chip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--crew);
+  border: 3px solid #fffaf0;
+  box-shadow: 0 2px 6px rgba(60, 40, 25, 0.3);
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.crew-chip.leader {
+  width: 3.1rem;
+  height: 3.1rem;
+  border-color: var(--ink);
+}
+
+.crew-you {
+  position: absolute;
+  bottom: -0.55rem;
+  padding: 0 0.35rem;
+  border-radius: 99px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.62rem;
+  text-shadow: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.crew-need {
+  position: absolute;
+  top: -0.55rem;
+  right: -0.55rem;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: #fffaf0;
+  font-size: 0.8rem;
+  text-shadow: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.crew-tab {
+  align-self: center;
+  margin-left: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 99px;
+  background: rgba(251, 245, 233, 0.94);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* --- Speech bubbles and captions ---------------------------------------------------- */
+.bubble-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bubble {
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-width: min(18rem, 70vw);
+  padding: 0.45rem 0.75rem 0.5rem;
+  border-radius: 14px;
+  background: #fffdf8;
+  border: 2px solid var(--speaker, var(--ink));
+  box-shadow: 0 3px 0 rgba(58, 44, 37, 0.25);
+  font-size: 0.95rem;
+  line-height: 1.3;
+  will-change: transform;
+}
+
+.bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  width: 14px;
+  height: 14px;
+  background: #fffdf8;
+  border-right: 2px solid var(--speaker, var(--ink));
+  border-bottom: 2px solid var(--speaker, var(--ink));
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.bubble-name {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.caption-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  max-width: min(46rem, calc(100vw - 32px));
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  background: rgba(30, 24, 20, 0.86);
+  color: #fff;
+  font-size: 1.05rem;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+.caption-bar.show {
+  opacity: 1;
+}
+
+/* --- Settings ---------------------------------------------------------------------- */
+.settings {
+  display: grid;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.settings h3 {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #2f7f86;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.setting-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.setting-row label,
+.setting-label {
+  font-weight: 600;
+}
+
+.setting-row small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.toggle,
+.choice-btn {
+  appearance: none;
+  min-width: 3.8rem;
+  min-height: 40px;
+  padding: 0.4rem 0.8rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fffaf0;
+  color: var(--ink);
+  font: 700 0.9rem/1 var(--body);
+  cursor: pointer;
+}
+
+.toggle[aria-pressed='true'],
+.choice-btn[aria-pressed='true'] {
+  background: #2f7f86;
+  border-color: #1f5c61;
+  color: #fff;
+}
+
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.slider input {
+  flex: 1;
+  accent-color: #2f7f86;
+  min-height: 32px;
+}
+
+.slider output {
+  min-width: 3rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.menu .stack.sub-back {
+  margin-top: 1rem;
+}
+
+.title-name.small {
+  font-size: 2rem;
+  margin-bottom: 0.6rem;
+}
+
+.title-card .settings {
+  max-height: 60vh;
+  overflow: auto;
+  padding-right: 0.3rem;
+}
+
+.menu {
+  width: min(460px, 100%);
+}
+
+/* --- Conversation history -------------------------------------------------------------- */
+.history {
+  max-height: 50vh;
+  overflow: auto;
+  margin: 0;
+  padding: 0 0.3rem 0 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+}
+
+.history li {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  background: #f6efe0;
+}
+
+.history .when {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+.history .empty {
+  background: none;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+  .crew-row {
+    bottom: 70px;
+  }
+  .status {
+    min-width: 0;
   }
 }

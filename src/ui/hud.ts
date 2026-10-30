@@ -18,6 +18,12 @@ export class Hud {
   private promptVisible = false;
   private bannerTween: gsap.core.Timeline | null = null;
   private live: HTMLElement;
+  private clock: HTMLElement;
+  private clockIcon: HTMLElement;
+  private vibeFill: HTMLElement;
+  private vibeLabel: HTMLElement;
+  private crewRow: HTMLElement;
+  private lastClock = '';
   reducedMotion = false;
 
   constructor(root: HTMLElement) {
@@ -37,7 +43,24 @@ export class Hud {
     this.hint = h('div', { class: 'hint paper' });
     this.live = h('div', { class: 'visually-hidden', attrs: { 'aria-live': 'polite' } });
     const pauseHint = h('div', { class: 'pause-hint', text: 'Esc · pause' });
-    this.el = h('div', { class: 'hud' }, this.banner, this.prompt, chip, this.hint, pauseHint, this.live);
+    this.clockIcon = h('span', { class: 'clock-icon', attrs: { 'aria-hidden': 'true' } });
+    this.clock = h('span', { class: 'clock-text' });
+    this.vibeFill = h('span', { class: 'vibe-fill' });
+    this.vibeLabel = h('span', { class: 'vibe-label' });
+    const status = h(
+      'div',
+      { class: 'status paper' },
+      h('div', { class: 'clock' }, this.clockIcon, this.clock),
+      h(
+        'div',
+        { class: 'vibe', attrs: { title: 'Group vibe' } },
+        h('span', { class: 'vibe-word', text: 'Vibe' }),
+        h('span', { class: 'vibe-meter', attrs: { 'aria-hidden': 'true' } }, this.vibeFill),
+        this.vibeLabel,
+      ),
+    );
+    this.crewRow = h('div', { class: 'crew-row', attrs: { 'aria-label': 'The crew' } });
+    this.el = h('div', { class: 'hud' }, this.banner, this.prompt, chip, this.hint, pauseHint, status, this.crewRow, this.live);
     root.append(this.el);
   }
 
@@ -93,6 +116,46 @@ export class Hud {
 
   setHighContrast(on: boolean): void {
     this.prompt.classList.toggle('high-contrast', on);
+  }
+
+  setClock(day: number, time: string, night: boolean): void {
+    const text = `Day ${day} · ${time}`;
+    if (text === this.lastClock) return;
+    this.lastClock = text;
+    this.clock.textContent = text;
+    this.clockIcon.textContent = night ? '☾' : '☀';
+    this.clockIcon.classList.toggle('night', night);
+  }
+
+  setVibe(value: number, label: string): void {
+    this.vibeFill.style.width = `${Math.round(value)}%`;
+    if (this.vibeLabel.textContent !== label) {
+      this.vibeLabel.textContent = label;
+      if (!this.reducedMotion) gsap.fromTo(this.vibeLabel, { y: -4 }, { y: 0, duration: 0.3, ease: 'back.out(3)' });
+    }
+  }
+
+  /** One chip per friend: initial, colour, who you are, and a gentle need hint in words. */
+  setCrew(list: Array<{ id: string; name: string; colour: string; leader: boolean; need: string | null }>): void {
+    const key = JSON.stringify(list);
+    if (this.crewRow.dataset.key === key) return;
+    this.crewRow.dataset.key = key;
+    const glyph: Record<string, string> = { hungry: '🍴', tired: '💤', bored: '✨' };
+    this.crewRow.replaceChildren(
+      ...list.map((m) => {
+        const label = `${m.name}${m.leader ? ' (you)' : ''}${m.need ? `, feeling ${m.need}` : ''}`;
+        const chip = h(
+          'div',
+          { class: `crew-chip${m.leader ? ' leader' : ''}`, attrs: { 'aria-label': label, title: label } },
+          h('span', { class: 'crew-initial', text: m.name[0] }),
+          m.leader ? h('span', { class: 'crew-you', text: 'You' }) : null,
+          m.need ? h('span', { class: 'crew-need', text: glyph[m.need] ?? '' }) : null,
+        );
+        chip.style.setProperty('--crew', m.colour);
+        return chip;
+      }),
+      h('span', { class: 'crew-tab', text: 'Tab · switch' }),
+    );
   }
 
   setCount(n: number, total: number): void {

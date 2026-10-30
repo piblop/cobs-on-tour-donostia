@@ -22,6 +22,13 @@ export class Character {
   private lean = 0;
   private blinkTimer = 2 + Math.random() * 3;
   private eyes: THREE.Mesh[] = [];
+  private stepSign = 1;
+  /** Called on each footfall while walking (for footstep sounds). */
+  onStep: (() => void) | null = null;
+  /** Sitting on a bench: legs forward, body lowered. */
+  seated = false;
+  /** Happy wave/cheer pose for celebrations and photos. */
+  cheering = 0;
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
 
@@ -165,13 +172,41 @@ export class Character {
     this.idleTime += dt;
     if (speed > 0.05) this.walkPhase += dt * (5.5 + speed * 1.6);
 
-    const swing = Math.sin(this.walkPhase) * 0.75 * t * motion;
+    const sinPhase = Math.sin(this.walkPhase);
+    if (speed > 0.6 && Math.sign(sinPhase) !== this.stepSign && sinPhase !== 0) {
+      this.stepSign = Math.sign(sinPhase);
+      this.onStep?.();
+    }
+    if (this.seated) {
+      this.legL.rotation.x = -1.45;
+      this.legR.rotation.x = -1.45;
+      this.armL.rotation.x = -0.35;
+      this.armR.rotation.x = -0.35;
+      this.armL.rotation.z = -0.08;
+      this.armR.rotation.z = 0.08;
+      this.body.rotation.x = -0.08;
+      this.body.rotation.z = 0;
+      this.body.position.y = -0.42;
+      this.body.scale.set(1, 1, 1);
+      this.head.rotation.y = Math.sin(this.idleTime * 0.5) * 0.25;
+      this.blink(dt);
+      return;
+    }
+    const swing = sinPhase * 0.75 * t * motion;
     this.legL.rotation.x = swing;
     this.legR.rotation.x = -swing;
     this.armL.rotation.x = -swing * 0.8;
     this.armR.rotation.x = swing * 0.8;
     this.armL.rotation.z = -0.12 - (1 - t) * 0.05;
     this.armR.rotation.z = 0.12 + (1 - t) * 0.05;
+    if (this.cheering > 0) {
+      this.cheering = Math.max(0, this.cheering - dt);
+      const wave = Math.sin(this.idleTime * 12) * 0.25 * motion;
+      this.armR.rotation.x = -2.6;
+      this.armR.rotation.z = 0.35 + wave;
+      this.armL.rotation.x = -2.4;
+      this.armL.rotation.z = -0.35 - wave;
+    }
 
     const bob = Math.abs(Math.sin(this.walkPhase)) * 0.07 * t * motion;
     const idle = (1 - t) * motion;
@@ -202,6 +237,10 @@ export class Character {
     this.body.position.y = y;
     this.body.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy));
 
+    this.blink(dt);
+  }
+
+  private blink(dt: number): void {
     // Blink now and then.
     this.blinkTimer -= dt;
     const blinking = this.blinkTimer < 0.12;

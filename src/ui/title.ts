@@ -8,7 +8,12 @@ export interface TitleScreen {
 }
 
 /** Title card over the live diorama. "Start Trip" is the user gesture that will unlock audio. */
-export function showTitle(root: HTMLElement, onStart: () => void, reducedMotion: boolean): TitleScreen {
+export function showTitle(
+  root: HTMLElement,
+  onStart: () => void,
+  reducedMotion: boolean,
+  settings: (onDone: () => void) => HTMLElement,
+): TitleScreen {
   const controls = h('div', { attrs: { hidden: '' } }, controlsList());
   let showingControls = false;
   const controlsBtn = button('How to play', () => {
@@ -19,6 +24,15 @@ export function showTitle(root: HTMLElement, onStart: () => void, reducedMotion:
   });
   controlsBtn.setAttribute('aria-expanded', 'false');
   const start = button('Start Trip', onStart, 'btn primary');
+  const settingsBtn = button('Settings', () => {
+    const front = Array.from(card.children);
+    const panel = settings(() => {
+      card.replaceChildren(...front);
+      settingsBtn.focus();
+    });
+    card.replaceChildren(h('h2', { class: 'title-name small', text: 'Settings' }), panel);
+    (panel.querySelector('button') as HTMLElement | null)?.focus();
+  });
 
   const card = h(
     'div',
@@ -30,7 +44,7 @@ export function showTitle(root: HTMLElement, onStart: () => void, reducedMotion:
       class: 'title-blurb',
       text: 'Four friends, one shell-shaped bay, and far too many pintxos. Wander, discover, and collect the moments.',
     }),
-    h('div', { class: 'title-actions' }, start, controlsBtn),
+    h('div', { class: 'title-actions' }, start, controlsBtn, settingsBtn),
     controls,
     h('p', { class: 'title-foot', text: 'Paulo, Annette, Huw and Romy are waiting on the promenade.' }),
   );
