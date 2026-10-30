@@ -58,6 +58,8 @@ export class Bubbles {
 
   /** Reposition bubbles; `anchor` returns a screen point above the friend, or null when off screen. */
   update(dt: number, anchor: (id: CrewId) => { x: number; y: number } | null): void {
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const items: Array<{ b: Live; px: number; py: number; w: number; h: number }> = [];
     for (const [id, b] of this.live) {
       b.left -= dt;
       if (b.left <= 0) {
@@ -72,11 +74,23 @@ export class Bubbles {
         continue;
       }
       b.el.style.opacity = '';
-      const w = b.el.offsetWidth;
-      const hgt = b.el.offsetHeight;
-      const x = Math.round(Math.min(window.innerWidth - w - 8, Math.max(8, p.x - w / 2)));
-      const y = Math.round(Math.min(window.innerHeight - hgt - 8, Math.max(8, p.y - hgt)));
-      b.el.style.transform = `translate(${x}px, ${y}px)`;
+      items.push({ b, px: p.x, py: p.y, w: b.el.offsetWidth, h: b.el.offsetHeight });
+    }
+    // Lowest bubbles keep their spot; any that would overlap are lifted above.
+    items.sort((a, c) => c.py - a.py);
+    for (const it of items) {
+      const x = Math.round(Math.min(window.innerWidth - it.w - 8, Math.max(8, it.px - it.w / 2)));
+      let y = Math.round(Math.min(window.innerHeight - it.h - 8, Math.max(8, it.py - it.h)));
+      for (let guard = 0; guard < 4; guard++) {
+        const hit = placed.find((r) => x < r.x + r.w + 6 && x + it.w + 6 > r.x && y < r.y + r.h + 6 && y + it.h + 6 > r.y);
+        if (!hit) break;
+        y = Math.max(8, hit.y - it.h - 8);
+      }
+      placed.push({ x, y, w: it.w, h: it.h });
+      it.b.el.style.transform = `translate(${x}px, ${y}px)`;
+      // Point the tail at the speaker, even when the bubble had to move.
+      const tail = Math.min(it.w - 16, Math.max(16, it.px - x));
+      it.b.el.style.setProperty('--tail-x', `${tail}px`);
     }
   }
 

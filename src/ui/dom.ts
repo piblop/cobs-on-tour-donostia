@@ -28,7 +28,7 @@ export function button(label: string, onClick: () => void, cls = 'btn'): HTMLBut
 
 /** Keyboard/controller focus cycling inside a container. */
 export function focusables(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), [tabindex="0"]'));
+  return Array.from(root.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]'));
 }
 
 export function moveFocus(root: HTMLElement, dir: 1 | -1): void {

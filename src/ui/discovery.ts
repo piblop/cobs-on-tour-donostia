@@ -36,11 +36,13 @@ export function showPolaroid(
   const release = trapFocus(card);
   keep.focus({ preventScroll: true });
 
+  // The backdrop fades; the card arrives as solid paper so text never blends into the scene.
+  gsap.fromTo(layer, { backgroundColor: 'rgba(58, 44, 37, 0)' }, { backgroundColor: 'rgba(58, 44, 37, 0.18)', duration: 0.25 });
   if (reducedMotion) {
-    gsap.fromTo(layer, { opacity: 0 }, { opacity: 1, duration: 0.2 });
+    gsap.fromTo(card, { opacity: 0 }, { opacity: 1, duration: 0.12 });
   } else {
-    gsap.fromTo(layer, { opacity: 0 }, { opacity: 1, duration: 0.25 });
-    gsap.fromTo(card, { y: 60, rotate: 6, scale: 0.92 }, { y: 0, rotate: -2, scale: 1, duration: firstTime ? 0.65 : 0.4, ease: 'back.out(1.5)' });
+    gsap.fromTo(card, { opacity: 0 }, { opacity: 1, duration: 0.1 });
+    gsap.fromTo(card, { y: 36, rotate: 4, scale: 0.96 }, { y: 0, rotate: -2, scale: 1, duration: firstTime ? 0.5 : 0.35, ease: 'back.out(1.4)' });
   }
 
   return {

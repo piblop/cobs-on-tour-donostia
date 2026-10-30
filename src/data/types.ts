@@ -87,12 +87,68 @@ export interface BanterLine {
   requiresMemory?: string;
 }
 
+export type FoodModel =
+  | 'tortilla'
+  | 'tomato-salad'
+  | 'gilda'
+  | 'mushroom'
+  | 'clams'
+  | 'cheek'
+  | 'cheesecake'
+  | 'txuleta'
+  | 'peppers'
+  | 'anchovy'
+  | 'drink';
+
+export interface FoodDef {
+  id: string;
+  name: string;
+  /** Basque or Spanish name shown in italics, if there is a common one. */
+  localName?: string;
+  description: string;
+  barId: string;
+  model: FoodModel;
+  /** Main colours for the procedural model. */
+  colours: { base: string; topping: string; accent: string };
+  alcoholFree: boolean;
+  /** How each friend reacts. Every friend gets a line, drinks included. */
+  reactions: Record<CrewId, string>;
+  /** Conversational rating shown in the Pintxo-dex, e.g. "Unexpected hit". */
+  rating: string;
+  fact: FactCheck;
+}
+
+export interface BarDef {
+  id: string;
+  /** Fictional name: these are game experiences inspired by real places. */
+  name: string;
+  inspiredBy: string;
+  blurb: string;
+  /** Where the door prompt sits, and which way the door faces. */
+  door: Vec2;
+  facing: number;
+  awning: string;
+  activity: 'crawl' | 'meal';
+  menu: string[];
+  actionLabel: string;
+}
+
+export interface WishDef {
+  id: string;
+  friend: CrewId;
+  text: string;
+  /** Completed by tasting a food or by a memory key happening. */
+  done: { food: string } | { memory: string };
+}
+
 export interface CrewMember {
   id: CrewId;
   name: string;
   /** Clothing and hair colours as hex strings. */
   colors: { top: string; bottom: string; hair: string; skin: string; accent: string };
   hairStyle: 'short' | 'bob' | 'curly' | 'ponytail';
+  /** Signature accessory, readable from the gameplay camera. */
+  accessory: 'cap' | 'camera' | 'backpack' | 'tote';
   heightScale: number;
   favouriteFoods: string[];
   drinkPreferences: string[];
