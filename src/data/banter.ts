@@ -1,0 +1,195 @@
+import type { BanterLine, BanterSpeaker } from './types.ts';
+
+/**
+ * Crew banter. Short, warm, a little silly. Each line plays at most once per
+ * session; when a context runs dry the crew is simply, comfortably quiet.
+ *
+ * Add a line: give it a unique id, a context (see BanterLine in types.ts) and
+ * one or more beats. Use `requiresMemory` for callbacks to things that really
+ * happened.
+ */
+function l(id: string, context: string, ...beats: Array<[BanterSpeaker, string]>): BanterLine {
+  return { id, context, beats: beats.map(([speaker, text]) => ({ speaker, text })) };
+}
+function cb(id: string, memory: string, ...beats: Array<[BanterSpeaker, string]>): BanterLine {
+  return { ...l(id, 'callback', ...beats), requiresMemory: memory };
+}
+
+export const banter: BanterLine[] = [
+  // --- Idle strolling ---------------------------------------------------------
+  l('idle-map', 'idle', ['paulo', 'I have a map. I am choosing not to look at it.']),
+  l('idle-photo-first', 'idle', ['annette', 'Photo first. Then we can keep walking. Then another photo.']),
+  l('idle-hello-dog', 'idle', ['huw', 'If we see a dog I am going to say hello to it. Just so everyone is prepared.']),
+  l('idle-mushrooms', 'idle', ['romy', 'I have been thinking about mushrooms for an hour.'], ['other', 'Only an hour?']),
+  l('idle-pace', 'idle', ['any', 'Is this a stroll or a march?'], ['leader', 'A purposeful stroll.']),
+  l('idle-shoes', 'idle', ['huw', 'These are my nice walking shoes. They are not nice. They are shoes.']),
+  l('idle-holiday-brain', 'idle', ['romy', 'What day is it?'], ['other', 'Holiday.'], ['romy', 'Perfect.']),
+  l('idle-light', 'idle', ['annette', 'The light here does something to the buildings. They look buttered.']),
+  l('idle-gumboots', 'idle', ['paulo', 'Annette said pack gumboots. I packed one gumboot.'], ['annette', 'Why one?'], ['paulo', 'Optimism.']),
+  l('idle-raincoat', 'idle', ['annette', 'Everyone has a raincoat, yes? October. Pack for everything.']),
+  l('idle-txakoli-morning', 'idle', ['huw', 'Someone told me txakoli in the morning is a local custom.'], ['romy', 'Someone was you.']),
+  l('idle-lost', 'idle', ['any', 'Are we lost?'], ['paulo', 'We are exploring with confidence.']),
+  l('idle-sea-air', 'idle', ['huw', 'Smell that sea air. That is the smell of me getting hungry later.']),
+  l('idle-tomato', 'idle', ['annette', 'Reminder: as many tomato salads as possible. That is the rule.']),
+  l('idle-cheesecake-plan', 'idle', ['huw', 'What is the plan?'], ['annette', 'Cheesecake. Then we make a plan.']),
+  l('idle-steps', 'idle', ['romy', 'My step counter says we have walked to France.']),
+  l('idle-postcard', 'idle', ['annette', 'Everything here looks like a postcard someone made too nice on purpose.']),
+  l('idle-whistle', 'idle', ['paulo', 'I have had the same three notes in my head since we got here.'], ['romy', 'We know. You keep whistling them.']),
+  l('idle-sun-hat', 'idle', ['huw', 'I should have brought a hat.'], ['any', 'You said that yesterday.'], ['huw', 'And I was right yesterday too.']),
+  l('idle-people-watching', 'idle', ['romy', 'Everyone here walks like they have somewhere lovely to be.']),
+  l('idle-names', 'idle', ['paulo', 'I am going to learn one Basque word a day.'], ['annette', 'Which one today?'], ['paulo', 'Still deciding.']),
+  l('idle-good-trip', 'idle', ['huw', 'Can I just say: good trip. Good trip, everyone.']),
+  l('idle-balconies', 'idle', ['annette', 'I want a balcony. Any balcony. That one. All of them.']),
+  l('idle-holiday-hair', 'idle', ['romy', 'The sea wind has given me holiday hair.'], ['other', 'It suits you.'], ['romy', 'I know.']),
+  l('idle-snack-scout', 'idle', ['huw', 'I am not hungry. I am snack scouting. For the future.']),
+
+  // --- Areas ------------------------------------------------------------------
+  l('concha-shell', 'area:la-concha', ['paulo', 'They call it La Concha because it is shaped like a shell.'], ['romy', 'Did you just read that off the map?']),
+  l('concha-railing', 'area:la-concha', ['annette', 'These railings are on every postcard. I am going to touch one. Respectfully.']),
+  l('concha-swim', 'area:la-concha', ['huw', 'Who is swimming?'], ['romy', 'You first.'], ['huw', 'Later. Emotionally preparing.']),
+  l('concha-curve', 'area:la-concha', ['paulo', 'The whole beach just curves around you. Like a hug.']),
+  l('concha-island', 'area:la-concha', ['annette', 'That little island out there. We are going, right?'], ['paulo', 'Absolutely. Somehow. Boat, probably.']),
+  l('concha-sand', 'area:la-concha', ['romy', 'The sand looks soft enough to nap on.'], ['huw', 'Do not tempt me.']),
+  l('concha-lamps', 'area:la-concha', ['annette', 'Even the lamp posts are dressed up for us.']),
+  l('concha-world-beach', 'area:la-concha', ['paulo', 'One of the great city beaches, they say.'], ['romy', 'They say a lot of things. They are right about this one.']),
+  l('concha-boats', 'area:la-concha', ['huw', 'I want to live on one of those little boats. Small life. Big view.']),
+  l('alderdi-carousel', 'area:alderdi-eder', ['huw', 'A carousel. I am an adult. I am going on the carousel.']),
+  l('alderdi-hall', 'area:alderdi-eder', ['annette', 'That is the town hall? It looks like a wedding cake that got a job.']),
+  l('alderdi-gardens', 'area:alderdi-eder', ['romy', 'Gardens on the bay. Very civilised.']),
+  l('alderdi-trees', 'area:alderdi-eder', ['paulo', 'The trees are trimmed like they are going somewhere fancy.']),
+  l('alderdi-bench', 'area:alderdi-eder', ['any', 'Good benches here.'], ['huw', 'You are rating benches now?'], ['any', 'I have always rated benches.']),
+  l('vieja-overrated', 'area:parte-vieja', ['annette', 'The old town is "overrated", apparently. More tourists than locals.'], ['romy', 'We are the tourists.'], ['annette', 'Nice ones, though.']),
+  l('vieja-lanes', 'area:parte-vieja', ['paulo', 'These lanes are narrow enough to hold hands with both walls.']),
+  l('vieja-smell', 'area:parte-vieja', ['huw', 'Something is grilling. I need to know what. I need to know now.']),
+  l('vieja-balconies', 'area:parte-vieja', ['annette', 'Every balcony has flowers. Somebody up there is very organised.']),
+  l('vieja-echo', 'area:parte-vieja', ['romy', 'Listen to the chatter. The whole street sounds like dinner.']),
+  l('vieja-crawl-plan', 'area:parte-vieja', ['paulo', 'Pintxos crawl rules: one pintxo, one drink, next bar.'], ['huw', 'And if the pintxo is amazing?'], ['paulo', 'Then two. We are not animals.']),
+  l('vieja-nestor', 'area:parte-vieja', ['paulo', 'Bar Néstor does a tortilla. You put your name down and pray.']),
+  l('vieja-clams', 'area:parte-vieja', ['annette', 'Clams in green sauce. Bread for the sauce is not optional.']),
+  l('vieja-cheesecake', 'area:parte-vieja', ['annette', 'La Viña is around here somewhere. Best cheesecake on the planet.'], ['huw', 'Lead the way. Please. Now.']),
+  l('vieja-street-music', 'area:parte-vieja', ['romy', 'I can hear a guitar somewhere. Follow it.']),
+  l('vieja-old-stones', 'area:parte-vieja', ['paulo', 'These stones have seen a lot of dinners.']),
+  l('vieja-plaza', 'area:parte-vieja', ['annette', 'The square has numbers on the balconies. Like seats at a theatre.']),
+
+  // --- Time of day -------------------------------------------------------------
+  l('morning-coffee', 'time:morning', ['annette', 'Morning! Café con leche, then the world.']),
+  l('morning-slow', 'time:morning', ['huw', 'I am awake. My face has not caught up yet.']),
+  l('morning-early-bird', 'time:morning', ['annette', 'I have been up for hours. I watched the sea. It was lovely. You missed it.']),
+  l('morning-txakoli', 'time:morning', ['romy', 'Is it too early for txakoli?'], ['paulo', 'Annette says it is tradition.'], ['annette', 'I said that. I stand by it.']),
+  l('morning-market', 'time:morning', ['annette', 'Mornings are for markets. Fish market. Cheese. Peppers. Everything.']),
+  l('morning-light', 'time:morning', ['paulo', 'Morning light on the bay. Everyone stop for one second.']),
+  l('midday-lunch', 'time:midday', ['huw', 'It is lunchtime somewhere. It is lunchtime here, specifically.']),
+  l('midday-sun', 'time:midday', ['romy', 'The sun is right overhead. I have no shadow. I am a ghost.']),
+  l('midday-siesta', 'time:midday', ['huw', 'Is siesta a real thing here or is it a thing I want to be real?']),
+  l('midday-shade', 'time:midday', ['annette', 'Shade, then sea, then shade again. That is the system.']),
+  l('midday-hungry-again', 'time:midday', ['paulo', 'How are we hungry again?'], ['huw', 'Talent.']),
+  l('afternoon-wander', 'time:afternoon', ['romy', 'Afternoons are for wandering with no point.'], ['paulo', 'My favourite kind of point.']),
+  l('afternoon-ice-cream', 'time:afternoon', ['huw', 'An afternoon without ice cream is a sad afternoon.']),
+  l('afternoon-feet', 'time:afternoon', ['annette', 'My feet have opinions.'], ['romy', 'Mine have a lawyer.']),
+  l('afternoon-tide', 'time:afternoon', ['paulo', 'The tide is going out. The beach just got bigger.']),
+  l('afternoon-plan-dinner', 'time:afternoon', ['huw', 'Should we start thinking about dinner?'], ['annette', 'It is four o’clock.'], ['huw', 'So, yes.']),
+  l('golden-oh', 'time:golden', ['annette', 'Oh. Oh, look at the light.']),
+  l('golden-gold', 'time:golden', ['paulo', 'Golden hour. The whole bay is glowing.'], ['romy', 'Even Huw is glowing.'], ['huw', 'I am always glowing.']),
+  l('golden-photo', 'time:golden', ['annette', 'Nobody move. This is the photo.']),
+  l('golden-sunset-spot', 'time:golden', ['paulo', 'We need a good sunset spot. Somewhere along the railing.']),
+  l('golden-long', 'time:golden', ['romy', 'The sunset here takes its time. I respect that.']),
+  l('golden-pink-clouds', 'time:golden', ['huw', 'The clouds have gone pink. Is that allowed?']),
+  l('golden-dinner-soon', 'time:golden', ['paulo', 'Sunset, then pintxos. That is the whole plan.'], ['annette', 'Great plan.']),
+  l('golden-quiet', 'time:golden', ['romy', 'Can we just be quiet for a minute?'], ['other', 'Yeah.']),
+  l('dusk-lamps', 'time:dusk', ['annette', 'The lamps are coming on. All along the bay. Like someone is setting a table.']),
+  l('dusk-blue', 'time:dusk', ['paulo', 'Blue hour. Everything looks like a painting of itself.']),
+  l('dusk-chilly', 'time:dusk', ['huw', 'It is getting chilly.'], ['annette', 'Raincoat. I told you.']),
+  l('dusk-windows', 'time:dusk', ['romy', 'All the windows are lighting up. Everyone is home cooking something nice.']),
+  l('dusk-bars-open', 'time:dusk', ['huw', 'Do you hear that? That is the sound of the bars opening.']),
+  l('night-stars', 'time:night', ['annette', 'You can see stars over the island.']),
+  l('night-owl', 'time:night', ['huw', 'Night time. My time. I feel powerful.'], ['romy', 'You feel like a nap.'], ['huw', 'A powerful nap.']),
+  l('night-quiet-sea', 'time:night', ['paulo', 'The sea sounds louder at night.']),
+  l('night-one-more', 'time:night', ['huw', 'One more pintxo?'], ['annette', 'It is very late.'], ['huw', 'One more small pintxo.']),
+  l('night-lamps-water', 'time:night', ['romy', 'The lamps are reflecting in the water. Showing off.']),
+  l('night-walk-home', 'time:night', ['paulo', 'Best part of the day: the walk home along the water.']),
+  l('night-tired-happy', 'time:night', ['annette', 'Tired. Happy. Mostly happy.']),
+  l('night-early-bird', 'time:night', ['annette', 'Some of us are getting up early tomorrow.'], ['huw', 'Some of us are not.']),
+
+  // --- Discoveries ---------------------------------------------------------------
+  l('disc-concha-1', 'discover:la-concha-railing', ['annette', 'Okay. This is why we came.']),
+  l('disc-concha-2', 'discover:la-concha-railing', ['huw', 'I am not crying. It is the sea air.']),
+  l('disc-concha-3', 'discover:la-concha-railing', ['paulo', 'Remember this one, everyone.'], ['romy', 'Hard to forget.']),
+  l('disc-vieja-1', 'discover:parte-vieja-lanes', ['romy', 'Every lane smells like a different dinner.']),
+  l('disc-vieja-2', 'discover:parte-vieja-lanes', ['huw', 'I would like to live in this lane. Right here. With that smell.']),
+  l('disc-vieja-3', 'discover:parte-vieja-lanes', ['paulo', 'We are coming back here tonight. Hungry.']),
+
+  // --- Needs ----------------------------------------------------------------------
+  l('hungry-1', 'need:hungry', ['subject', 'I am getting peckish. Snack o’clock?']),
+  l('hungry-2', 'need:hungry', ['subject', 'Food soon? My stomach just made a noise in Basque.']),
+  l('hungry-3', 'need:hungry', ['subject', 'I could eat a whole tortilla. Asking for me.']),
+  l('hungry-4', 'need:hungry', ['subject', 'Is anyone else thinking about lunch, or just me, constantly?']),
+  l('hungry-5', 'need:hungry', ['subject', 'Pintxo break? A small one? A medium one?'], ['other', 'Yes.']),
+  l('hungry-6', 'need:hungry', ['subject', 'Tomato salad. I need a tomato salad. It is the rule.']),
+  l('tired-1', 'need:tired', ['subject', 'Can we sit for a bit? There are benches. Lovely benches.']),
+  l('tired-2', 'need:tired', ['subject', 'My legs would like to file a complaint.']),
+  l('tired-3', 'need:tired', ['subject', 'Five minutes on a bench and I will be a new person.']),
+  l('tired-4', 'need:tired', ['subject', 'I am fine. I am just leaning on the air for a moment.']),
+  l('tired-5', 'need:tired', ['subject', 'Quiet sit-down? Look at the sea, do nothing, perfect.']),
+  l('bored-1', 'need:bored', ['subject', 'Ooh, what is over there? Let us go look.']),
+  l('bored-2', 'need:bored', ['subject', 'I feel like there is something amazing around the corner.']),
+  l('bored-3', 'need:bored', ['subject', 'Somebody pick a direction. Any direction. Adventure!']),
+  l('bored-4', 'need:bored', ['subject', 'I spy with my little eye… a whole old town we have not explored.']),
+  l('bored-5', 'need:bored', ['subject', 'We have not found anything new in ages. I am restless.']),
+
+  // --- Switching who you play -------------------------------------------------------
+  l('switch-paulo-1', 'switch:paulo', ['paulo', 'Right. I have the map. Follow me.']),
+  l('switch-paulo-2', 'switch:paulo', ['paulo', 'My turn to lead. Viewpoints, here we come.']),
+  l('switch-paulo-3', 'switch:paulo', ['paulo', 'Back in charge. Nobody panic.']),
+  l('switch-annette-1', 'switch:annette', ['annette', 'My turn. We are going somewhere photogenic.']),
+  l('switch-annette-2', 'switch:annette', ['annette', 'Follow me. I know where the cheesecake lives.']),
+  l('switch-annette-3', 'switch:annette', ['annette', 'Okay, everyone, keep up. Early bird gets the tomato salad.']),
+  l('switch-huw-1', 'switch:huw', ['huw', 'Huw is leading. Dog-spotting tour begins.']),
+  l('switch-huw-2', 'switch:huw', ['huw', 'I will lead us directly to dessert.']),
+  l('switch-huw-3', 'switch:huw', ['huw', 'Follow me! I have absolutely no plan!']),
+  l('switch-romy-1', 'switch:romy', ['romy', 'My turn. We are following the music.']),
+  l('switch-romy-2', 'switch:romy', ['romy', 'I am in charge now. Mushrooms are the priority.']),
+  l('switch-romy-3', 'switch:romy', ['romy', 'Fine. I will lead. Try to keep up.']),
+
+  // --- Wandering off ------------------------------------------------------------------
+  l('inv-1', 'investigate', ['subject', 'Hang on, look at this.']),
+  l('inv-2', 'investigate', ['subject', 'Ooh. Two seconds.']),
+  l('inv-3', 'investigate', ['subject', 'Has anyone seen this? Come and see this.']),
+  l('inv-4', 'investigate', ['subject', 'Just checking something. Not lost. Investigating.']),
+  l('inv-5', 'investigate', ['subject', 'This would make a good photo. Hold on.']),
+  l('inv-6', 'investigate', ['subject', 'I found a nice bit. Everyone come admire my nice bit.']),
+  l('inv-7', 'investigate', ['subject', 'Look at the view from here!']),
+  l('inv-8', 'investigate', ['subject', 'Wait for me, I am being cultured.']),
+
+  // --- Sitting together on a bench -------------------------------------------------------
+  l('bench-1', 'bench', ['annette', 'Best seat in the house.'], ['huw', 'Best bench in the country.']),
+  l('bench-2', 'bench', ['paulo', 'Remember when we planned this trip on a napkin?'], ['romy', 'It was a very good napkin.']),
+  l('bench-3', 'bench', ['huw', 'If I sit here long enough, will someone bring me a pintxo?'], ['annette', 'No.'], ['huw', 'Worth a try.']),
+  l('bench-4', 'bench', ['romy', 'This is my favourite bit. Not doing anything. Together.']),
+  l('bench-5', 'bench', ['paulo', 'Rating this bench: nine out of ten.'], ['annette', 'What would make it ten?'], ['paulo', 'Cheesecake.']),
+  l('bench-6', 'bench', ['annette', 'I could sit here and watch the sea all day.'], ['romy', 'You would last ten minutes.'], ['annette', 'Eleven.']),
+  l('bench-7', 'bench', ['huw', 'Group nap?'], ['other', 'Group nap.']),
+  l('bench-8', 'bench', ['romy', 'Look at us. Proper holiday people.']),
+  l('bench-9', 'bench', ['paulo', 'Same time next year?'], ['annette', 'Same bench.']),
+
+  // --- Moments ----------------------------------------------------------------------------
+  l('vibe-high-1', 'vibe:high', ['huw', 'Is it just me, or is this the best day ever?'], ['annette', 'It is not just you.']),
+  l('vibe-high-2', 'vibe:high', ['romy', 'I am having a really nice time. Do not make it weird.']),
+  l('vibe-high-3', 'vibe:high', ['paulo', 'Cobs on Tour! Best crew.'], ['any', 'Best crew!']),
+  l('sunset-1', 'sunset', ['annette', 'There it goes. Right into the sea.'], ['paulo', 'Same time tomorrow?']),
+  l('sunset-2', 'sunset', ['romy', 'Okay. That was worth the whole flight.']),
+  l('sunset-3', 'sunset', ['huw', 'Somebody clap. Is clapping for a sunset weird? I am clapping.']),
+  l('recover-1', 'recover', ['subject', 'Sorry! Sorry. Got distracted. I am here.']),
+  l('recover-2', 'recover', ['subject', 'Wait for me!']),
+  l('recover-3', 'recover', ['subject', 'Found you. Was not lost. Was taking the scenic route.']),
+  l('rain-1', 'weather:rain', ['annette', 'Raincoats on! Told you.']),
+  l('rain-2', 'weather:rain', ['huw', 'It is just a bit of drizzle. Refreshing. Ow, my eye.']),
+  l('rain-3', 'weather:rain', ['romy', 'Rain makes everything shiny. I like it.']),
+
+  // --- Callbacks: only after the thing really happened --------------------------------------
+  cb('cb-railing-1', 'discovered:la-concha-railing', ['huw', 'I keep thinking about that view from the railing.']),
+  cb('cb-railing-2', 'discovered:la-concha-railing', ['annette', 'That photo at the railing is going on the fridge.']),
+  cb('cb-lanes-1', 'discovered:parte-vieja-lanes', ['paulo', 'Those lanes in the old town. We are going back tonight.']),
+  cb('cb-bench-1', 'sat:bench', ['romy', 'That bench sit was the best five minutes of the day.']),
+  cb('cb-sunset-1', 'watched:sunset', ['paulo', 'That sunset though.'], ['annette', 'That sunset.']),
+  cb('cb-switch-huw', 'led:huw', ['romy', 'Remember when Huw led and we walked in a circle?'], ['huw', 'It was a tour of the circle.']),
+];

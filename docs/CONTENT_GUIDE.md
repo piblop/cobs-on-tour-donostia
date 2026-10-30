@@ -54,7 +54,18 @@ To add a new named area (for the banner that appears on entry), add it to `areas
 
 ## Add a banter line
 
-*Arrives in M2 (`src/data/banter.ts`).* Lines will be tagged by speaker, context (location, weather, time of day, food, discovery) and an optional memory condition, so a callback only plays if the event really happened.
+Edit `src/data/banter.ts`. Each line has an id, a context and one or more beats:
+
+```ts
+l('vieja-lanes', 'area:parte-vieja', ['paulo', 'These lanes are narrow enough to hold hands with both walls.']),
+l('golden-gold', 'time:golden', ['paulo', 'Golden hour.'], ['romy', 'Even Huw is glowing.']),
+cb('cb-railing-1', 'discovered:la-concha-railing', ['huw', 'I keep thinking about that view.']), // callback
+```
+
+- **Contexts:** `idle`, `area:<area id>`, `time:<morning|midday|afternoon|golden|dusk|night>`, `discover:<location id>`, `need:<hungry|tired|bored>`, `switch:<friend id>`, `investigate`, `bench`, `vibe:high`, `sunset`, `recover`, `weather:rain`, `callback`.
+- **Speakers:** a friend id (`paulo`, `annette`, `huw`, `romy`), `leader` (whoever you control), `subject` (the friend the moment is about, e.g. the hungry one), `any` (any friend but the leader) or `other` (someone other than the previous speaker).
+- **Callbacks:** use `cb(id, memoryKey, ...)`. The line only plays if that memory really happened (see `src/crew/memories.ts`; keys look like `discovered:<id>`, `sat:bench`, `watched:sunset`, `led:<friend>`).
+- Each line plays at most once per session. Keep lines short: a bubble stays up 2 to 6.5 seconds depending on length.
 
 ## Add a friend preference
 

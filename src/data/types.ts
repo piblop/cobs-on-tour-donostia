@@ -56,8 +56,39 @@ export interface LocationDef {
   fact: FactCheck;
 }
 
+export type CrewId = 'paulo' | 'annette' | 'huw' | 'romy';
+
+/**
+ * Who says a beat:
+ * - a crew id: that friend specifically,
+ * - 'leader': whoever the player is controlling,
+ * - 'subject': the friend the moment is about (the hungry one, the one who wandered off),
+ * - 'any': any friend who isn't the leader,
+ * - 'other': a different friend from the previous beat's speaker.
+ */
+export type BanterSpeaker = CrewId | 'leader' | 'subject' | 'any' | 'other';
+
+export interface BanterBeat {
+  speaker: BanterSpeaker;
+  text: string;
+}
+
+/**
+ * Banter contexts:
+ * idle, area:<id>, time:<morning|midday|afternoon|golden|dusk|night>,
+ * discover:<locationId>, need:<hungry|tired|bored>, switch:<crewId>,
+ * investigate, bench, vibe:high, sunset, recover, weather:rain, callback.
+ */
+export interface BanterLine {
+  id: string;
+  context: string;
+  beats: BanterBeat[];
+  /** Only play if this memory event has happened (see src/crew/memories.ts). */
+  requiresMemory?: string;
+}
+
 export interface CrewMember {
-  id: 'paulo' | 'annette' | 'huw' | 'romy';
+  id: CrewId;
   name: string;
   /** Clothing and hair colours as hex strings. */
   colors: { top: string; bottom: string; hair: string; skin: string; accent: string };

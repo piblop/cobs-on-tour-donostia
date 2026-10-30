@@ -55,7 +55,25 @@ export const PALETTE = {
   cloudShade: '#e9c3c0',
 } as const;
 
+export interface SkyUniforms {
+  zenith: { value: THREE.Color };
+  mid: { value: THREE.Color };
+  horizon: { value: THREE.Color };
+  glow: { value: THREE.Color };
+  cloudLit: { value: THREE.Color };
+  cloudShade: { value: THREE.Color };
+  sunDir: { value: THREE.Vector3 };
+  discColor: { value: THREE.Color };
+  uNight: { value: number };
+  uTime: { value: number };
+}
+
 export interface Scenery {
+  sky: SkyUniforms;
+  /** Lamp glass: brightens at dusk. */
+  lampGlass: THREE.MeshLambertMaterial;
+  /** Warm pools of light under the lamps, faded in at night. */
+  lampPools: THREE.MeshBasicMaterial;
   group: THREE.Group;
   sun: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
@@ -110,6 +128,22 @@ function flatRect(minX: number, maxX: number, minZ: number, maxZ: number, y: num
   return g;
 }
 
+/** Soft radial falloff for light pools. */
+function radialGlowTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 /** Low-poly hill: a squashed icosphere with seeded bumps. */
 function hillGeometry(radius: number, height: number, seed: number): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(1, 3);
@@ -149,6 +183,17 @@ export function createScenery(): Scenery {
   };
 
   const vcMat = track(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const lampGlass = track(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffcf86', emissiveIntensity: 0.25 }));
+  const lampPools = track(
+    new THREE.MeshBasicMaterial({
+      map: track(radialGlowTexture()),
+      color: '#ffcf8a',
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
   const flatVc = track(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
   // --- Sky, fog and light ----------------------------------------------------
@@ -163,6 +208,8 @@ export function createScenery(): Scenery {
     cloudShade: { value: lin(PALETTE.cloudShade) },
     // The visible sun sits low over Monte Igueldo, the classic sunset side of the bay.
     sunDir: { value: new THREE.Vector3(-0.53, 0.17, -0.83).normalize() },
+    discColor: { value: new THREE.Color(1.0, 0.97, 0.88) },
+    uNight: { value: 0 },
     uTime: { value: 0 },
   };
   const skyMat = track(
@@ -186,6 +233,8 @@ export function createScenery(): Scenery {
         uniform vec3 cloudLit;
         uniform vec3 cloudShade;
         uniform vec3 sunDir;
+        uniform vec3 discColor;
+        uniform float uNight;
         uniform float uTime;
         varying vec3 vDir;
 
@@ -219,7 +268,14 @@ export function createScenery(): Scenery {
           col = mix(col, glow, band * 0.55);
           // Halo and disc.
           col += glow * pow(sd, 24.0) * 0.45;
-          col = mix(col, vec3(1.0, 0.97, 0.88), smoothstep(0.9975, 0.999, sd));
+          col = mix(col, discColor, smoothstep(0.9975, 0.999, sd));
+          // Stars come out as the night deepens.
+          if (uNight > 0.01 && h > 0.0) {
+            vec3 cell = floor(d * 260.0);
+            float star = step(0.9965, hash(cell.xy + cell.z * 7.31));
+            float twinkle = 0.6 + 0.4 * sin(uTime * 2.0 + hash(cell.zy) * 40.0);
+            col += vec3(1.0, 0.96, 0.9) * star * twinkle * smoothstep(0.06, 0.35, h) * uNight * 0.9;
+          }
 
           if (h > 0.0) {
             // Project the dome onto a flat cloud layer so clouds shrink toward the horizon.
@@ -510,10 +566,15 @@ export function createScenery(): Scenery {
   {
     const lamps = byKind('lamp');
     const poleMat = track(new THREE.MeshLambertMaterial({ color: '#3f4a4f' }));
-    const glassMat = track(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffcf86', emissiveIntensity: 0.25 }));
     instanced(new THREE.CylinderGeometry(0.06, 0.09, 3.4, 6), poleMat, lamps, 1.7);
-    instanced(new THREE.SphereGeometry(0.26, 10, 8), glassMat, lamps, 3.55);
+    instanced(new THREE.SphereGeometry(0.26, 10, 8), lampGlass, lamps, 3.55);
     instanced(new THREE.ConeGeometry(0.3, 0.25, 8), poleMat, lamps, 3.9);
+    const pool = new THREE.CircleGeometry(2.6, 24);
+    pool.rotateX(-Math.PI / 2);
+    const pools = instanced(pool, lampPools, lamps, 0.03);
+    pools.castShadow = false;
+    pools.receiveShadow = false;
+    pools.renderOrder = 2;
   }
   {
     const benches = byKind('bench');
@@ -660,6 +721,9 @@ export function createScenery(): Scenery {
     group,
     sun,
     hemi,
+    sky: skyUniforms,
+    lampGlass,
+    lampPools,
     update(time: number) {
       seaUniforms.uTime.value = time;
       skyUniforms.uTime.value = time;

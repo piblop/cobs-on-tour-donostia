@@ -5,6 +5,9 @@ import * as THREE from 'three';
  * between the camera and the crew dissolve with a soft dither, so the friends
  * stay visible in narrow lanes without the camera ever jumping.
  */
+/** 0 by day, 1 when windows glow amber at night. Shared by every facade. */
+export const windowGlow = { value: 0 };
+
 export const cutaway = {
   uFocus: { value: new THREE.Vector3() },
   uCam: { value: new THREE.Vector3() },
@@ -103,7 +106,8 @@ export function facadeTextures(kind: 'row' | 'oldtown'): { map: THREE.CanvasText
     g.fillRect(wx + ww + 2, wy, 12, wh);
     // Glass catching the sky: light at the top, deeper below.
     if (mask) {
-      g.fillStyle = '#000000';
+      // Green marks glass, so windows can glow warm at night.
+      g.fillStyle = '#00ff00';
     } else {
       const grad = g.createLinearGradient(0, wy, 0, wy + wh);
       grad.addColorStop(0, '#a9cfe0');
@@ -137,8 +141,20 @@ export function facadeTextures(kind: 'row' | 'oldtown'): { map: THREE.CanvasText
 export function plasterTint(mask: THREE.Texture): (shader: THREE.WebGLProgramParametersWithUniforms) => void {
   return (shader) => {
     shader.uniforms.uPlasterMask = { value: mask };
+    shader.uniforms.uWindowGlow = windowGlow;
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uPlasterMask;')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uPlasterMask;\nuniform float uWindowGlow;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        #if defined( USE_MAP )
+          vec4 facadeMask = texture2D(uPlasterMask, vMapUv);
+          // Roughly two windows in three are lit, chosen per window cell.
+          vec2 cellId = floor(vMapUv);
+          float lit = step(0.33, fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453));
+          totalEmissiveRadiance += vec3(1.0, 0.68, 0.32) * facadeMask.g * (1.0 - facadeMask.r) * lit * uWindowGlow * 1.6;
+        #endif`,
+      )
       .replace(
         '#include <color_fragment>',
         `#if defined( USE_COLOR ) && defined( USE_MAP )
