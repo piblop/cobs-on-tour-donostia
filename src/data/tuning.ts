@@ -67,6 +67,12 @@ export const minigameTuning = {
   },
 } as const;
 
+/** The shape of the trip. */
+export const trip = {
+  /** The ending montage plays after this day's evening. "One More Day" continues after it. */
+  days: 5,
+} as const;
+
 export const interaction = {
   /** Repeat visits skip the glide and show the polaroid quickly. */
   repeatCardDelay: 0.15,

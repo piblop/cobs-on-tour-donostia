@@ -416,6 +416,30 @@ export class AudioEngine {
     notes.forEach((f, i) => this.pluck(f, 0.07, now + i * 0.32));
   }
 
+  /** The ending theme: a slow, warm melody over the pad. Original, procedural. */
+  playEndingTheme(): void {
+    if (!this.ctx || this.suspended) return;
+    const now = this.ctx.currentTime + 0.2;
+    // D major, gently rising and settling: one bar per chord.
+    const phrase = [
+      [587.33, 659.25, 739.99, 880],
+      [493.88, 587.33, 659.25, 739.99],
+      [659.25, 739.99, 880, 987.77],
+      [587.33, 739.99, 659.25, 587.33],
+    ];
+    let t = now;
+    for (let rep = 0; rep < 2; rep++) {
+      for (const bar of phrase) {
+        for (const f of bar) {
+          this.pluck(f, 0.06, t);
+          t += 0.55;
+        }
+      }
+    }
+    this.pluck(587.33, 0.08, t + 0.3);
+    this.pluck(293.66, 0.07, t + 0.3);
+  }
+
   /** Short UI feedback. */
   ui(kind: 'click' | 'open' | 'close' | 'discover' | 'cheer' | 'switch'): void {
     if (!this.ctx || this.suspended) return;

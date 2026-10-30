@@ -128,6 +128,8 @@ export class Crowds {
   }
 
   dispose(): void {
+    this.bodies.dispose();
+    this.heads.dispose();
     for (const g of this.geos) g.dispose();
     for (const m of this.mats) m.dispose();
   }
