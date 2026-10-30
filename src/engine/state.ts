@@ -6,11 +6,13 @@ import { events, type GameStateName } from './events.ts';
  */
 const allowed: Record<GameStateName, GameStateName[]> = {
   loading: ['title'],
-  title: ['exploring', 'cinematic'],
-  exploring: ['menu', 'cinematic', 'card'],
-  cinematic: ['card', 'exploring', 'menu'],
-  card: ['exploring', 'cinematic'],
-  menu: ['exploring', 'title', 'cinematic', 'card'],
+  title: ['exploring', 'cinematic', 'scene'],
+  exploring: ['menu', 'cinematic', 'card', 'scene', 'minigame'],
+  cinematic: ['card', 'exploring', 'menu', 'scene'],
+  card: ['exploring', 'cinematic', 'scene'],
+  menu: ['exploring', 'title', 'cinematic', 'card', 'scene'],
+  scene: ['exploring', 'minigame', 'cinematic', 'card', 'title', 'menu'],
+  minigame: ['scene', 'exploring'],
 };
 
 export class GameState {
@@ -26,7 +28,7 @@ export class GameState {
 
   /** The world clock and simulation only advance in these states. */
   get simulationRunning(): boolean {
-    return this.current === 'exploring' || this.current === 'cinematic' || this.current === 'card';
+    return this.current === 'exploring' || this.current === 'cinematic' || this.current === 'card' || this.current === 'scene';
   }
 
   set(next: GameStateName): void {

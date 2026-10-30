@@ -7,13 +7,19 @@ export interface TitleScreen {
   nav(dir: 1 | -1): void;
 }
 
-/** Title card over the live diorama. "Start Trip" is the user gesture that will unlock audio. */
-export function showTitle(
-  root: HTMLElement,
-  onStart: () => void,
-  reducedMotion: boolean,
-  settings: (onDone: () => void) => HTMLElement,
-): TitleScreen {
+export interface TitleOptions {
+  onNew: () => void;
+  /** Present when a saved trip exists. */
+  onContinue?: () => void;
+  continueLabel?: string;
+  reducedMotion: boolean;
+  settings: (onDone: () => void) => HTMLElement;
+  /** Shown when browser storage is unavailable. */
+  storageNote?: string;
+}
+
+/** Title card over the live diorama. "Start Trip" is the user gesture that unlocks audio. */
+export function showTitle(root: HTMLElement, o: TitleOptions): TitleScreen {
   const controls = h('div', { attrs: { hidden: '' } }, controlsList());
   let showingControls = false;
   const controlsBtn = button('How to play', () => {
@@ -23,10 +29,13 @@ export function showTitle(
     controlsBtn.setAttribute('aria-expanded', String(showingControls));
   });
   controlsBtn.setAttribute('aria-expanded', 'false');
-  const start = button('Start Trip', onStart, 'btn primary');
+  const primary = o.onContinue
+    ? button(o.continueLabel ?? 'Continue trip', o.onContinue, 'btn primary')
+    : button('Start Trip', o.onNew, 'btn primary');
+  const fresh = o.onContinue ? button('New trip', o.onNew) : null;
   const settingsBtn = button('Settings', () => {
     const front = Array.from(card.children);
-    const panel = settings(() => {
+    const panel = o.settings(() => {
       card.replaceChildren(...front);
       settingsBtn.focus();
     });
@@ -44,16 +53,19 @@ export function showTitle(
       class: 'title-blurb',
       text: 'Four friends, one shell-shaped bay, and far too many pintxos. Wander, discover, and collect the moments.',
     }),
-    h('div', { class: 'title-actions' }, start, controlsBtn, settingsBtn),
+    h('div', { class: 'title-actions' }, primary, fresh, controlsBtn, settingsBtn),
     controls,
-    h('p', { class: 'title-foot', text: 'Paulo, Annette, Huw and Romy are waiting on the promenade.' }),
+    h('p', {
+      class: 'title-foot',
+      text: o.storageNote ?? 'Your trip saves in this browser on this device. Clearing site data removes it.',
+    }),
   );
   const el = h('div', { class: 'title-screen' }, card);
   root.append(el);
   const release = trapFocus(card);
-  start.focus();
+  primary.focus();
 
-  if (!reducedMotion) {
+  if (!o.reducedMotion) {
     gsap.from(card, { y: 30, opacity: 0, rotate: -4, duration: 0.8, ease: 'back.out(1.6)' });
   }
 
@@ -65,7 +77,7 @@ export function showTitle(
       return new Promise((resolve) => {
         gsap.to(el, {
           opacity: 0,
-          duration: reducedMotion ? 0.15 : 0.45,
+          duration: o.reducedMotion ? 0.15 : 0.45,
           ease: 'power2.in',
           onComplete: () => {
             el.remove();

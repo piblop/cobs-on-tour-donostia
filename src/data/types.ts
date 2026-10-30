@@ -26,7 +26,7 @@ export interface CameraShot {
   target: Vec3;
 }
 
-export type AreaId = 'la-concha' | 'alderdi-eder' | 'parte-vieja';
+export type AreaId = 'la-concha' | 'alderdi-eder' | 'parte-vieja' | 'plaza';
 
 export interface Area {
   id: AreaId;

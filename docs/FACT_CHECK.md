@@ -7,9 +7,21 @@ Nothing in the game is verified until a human checks the claim and sets `needsRe
 
 **Verify current star counts before sharing.** (Applies to the tasting-menu restaurants once they are added.)
 
-Pending review: 2 of 2 claims.
+Pending review: 14 of 14 claims.
 
 | Table | ID | Shown as | Claim | Source |
 | --- | --- | --- | --- | --- |
 | locations | `la-concha-railing` | La Concha | La Concha's white promenade railing is one of the city's best-known symbols, and its curling pattern turns up on souvenirs all over town. | unsourced |
 | locations | `parte-vieja-lanes` | Parte Vieja | The Parte Vieja is the oldest part of Donostia, tucked between the bay and Monte Urgull, and is famous for its pintxos bars. | unsourced |
+| foods | `gilda` | Gilda | The Gilda is said to be named after a 1940s film heroine: green, salty and a little bit spicy. | unsourced |
+| foods | `mushroom-pintxo` | Wild mushrooms with egg yolk | Wild mushrooms (setas) turn up on Basque bar counters when they are in season, usually in autumn. | unsourced |
+| foods | `clams` | Clams in green sauce | Almejas a la marinera are clams cooked in a sauce of white wine, garlic and parsley. | unsourced |
+| foods | `veal-cheek` | Veal cheek in red wine | Veal cheek (carrillera) is a slow-cooked cut often served braised in red wine. | unsourced |
+| foods | `anchovies` | Anchovies on toast | Anchovies from the Bay of Biscay are a staple of the Basque coast. | unsourced |
+| foods | `green-peppers` | Fried green peppers | Small fried green peppers are a common bar snack in northern Spain, and the odd one is surprisingly hot. | unsourced |
+| foods | `txakoli` | Txakoli | Txakoli is a slightly sparkling white wine from the Basque coast, often poured from a height into the glass. | unsourced |
+| foods | `mosto` | Mosto | Mosto is unfermented grape juice, a classic alcohol-free order in Spanish bars. | unsourced |
+| foods | `tomato-salad` | Tomato salad | Ripe local tomatoes dressed simply with olive oil and salt are a much-loved Basque dish in season. | unsourced |
+| foods | `txuleta` | Txuleta to share | Txuleta is a thick bone-in steak grilled over coals, usually served rare and shared. | unsourced |
+| foods | `tortilla` | The famous tortilla | Basque bar tortillas are often served thick and slightly runny in the middle. | unsourced |
+| foods | `burnt-cheesecake` | Burnt Basque cheesecake | Burnt Basque cheesecake is baked at a high heat so the top caramelises dark while the middle stays creamy. | unsourced |

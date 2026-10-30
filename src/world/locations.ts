@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { areas, locations } from '../data/locations.ts';
-import type { Area, LocationDef } from '../data/types.ts';
+import { bars } from '../data/restaurants.ts';
+import type { Area, BarDef, LocationDef } from '../data/types.ts';
 import { groundY, propLayout, type Prop } from './map.ts';
 
 /** Anything the crew can use: a discovery, or a bench to sit on together. */
 export type Spot =
   | { kind: 'discovery'; id: string; x: number; z: number; radius: number; label: string; loc: LocationDef }
-  | { kind: 'bench'; id: string; x: number; z: number; radius: number; label: string; bench: Prop };
+  | { kind: 'bench'; id: string; x: number; z: number; radius: number; label: string; bench: Prop }
+  | { kind: 'bar'; id: string; x: number; z: number; radius: number; label: string; bar: BarDef };
 
 /**
  * Usable spots in the world. Discoveries have a soft glowing ring and a
@@ -29,6 +31,9 @@ export class Interactables {
     for (const loc of locations) {
       this.add({ kind: 'discovery', id: loc.id, x: loc.position.x, z: loc.position.z, radius: loc.interactRadius, label: loc.actionLabel, loc });
     }
+    for (const bar of bars) {
+      this.add({ kind: 'bar', id: `bar-${bar.id}`, x: bar.door.x, z: bar.door.z, radius: 1.9, label: bar.actionLabel, bar });
+    }
     propLayout()
       .filter((p) => p.kind === 'bench')
       .forEach((bench, i) => {
@@ -46,7 +51,7 @@ export class Interactables {
     ring.position.set(spot.x, y, spot.z);
     ring.renderOrder = 2;
     let sparkle: THREE.Mesh | null = null;
-    if (spot.kind === 'discovery') {
+    if (spot.kind === 'discovery' || spot.kind === 'bar') {
       sparkle = new THREE.Mesh(this.sparkleGeo, this.sparkleMat);
       sparkle.position.set(spot.x, y + 2.4, spot.z);
       this.group.add(sparkle);
@@ -95,6 +100,11 @@ export class Interactables {
   markDiscovered(id: string): void {
     const r = this.rings.get(id);
     if (r?.sparkle) r.sparkle.visible = false;
+  }
+
+  /** A fresh trip: every discovery sparkles again. */
+  resetDiscovered(): void {
+    for (const r of this.rings.values()) if (r.sparkle && r.kind === 'discovery') r.sparkle.visible = true;
   }
 
   /** Points followers may wander over to look at. */

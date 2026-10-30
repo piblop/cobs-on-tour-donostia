@@ -24,6 +24,7 @@ export class Hud {
   private vibeLabel: HTMLElement;
   private crewRow: HTMLElement;
   private lastClock = '';
+  private goals: HTMLElement;
   reducedMotion = false;
 
   constructor(root: HTMLElement) {
@@ -60,6 +61,8 @@ export class Hud {
       ),
     );
     this.crewRow = h('div', { class: 'crew-row', attrs: { 'aria-label': 'The crew' } });
+    this.goals = h('div', { class: 'goals paper', attrs: { 'aria-label': 'Today' } });
+    status.append(this.goals);
     this.el = h('div', { class: 'hud' }, this.banner, this.prompt, chip, this.hint, pauseHint, status, this.crewRow, this.live);
     root.append(this.el);
   }
@@ -155,6 +158,24 @@ export class Hud {
         return chip;
       }),
       h('span', { class: 'crew-tab', text: 'Tab · switch' }),
+    );
+  }
+
+  /** The day's goal or pinned wishes, ticked off in words (never colour alone). */
+  setGoals(items: Array<{ text: string; done: boolean }>): void {
+    const key = JSON.stringify(items);
+    if (this.goals.dataset.key === key) return;
+    const before = this.goals.dataset.key ? (JSON.parse(this.goals.dataset.key) as Array<{ done: boolean }>) : [];
+    this.goals.dataset.key = key;
+    this.goals.hidden = items.length === 0;
+    this.goals.replaceChildren(
+      h('span', { class: 'goals-title', text: 'Today' }),
+      ...items.map((it, i) => {
+        const li = h('div', { class: `goal${it.done ? ' done' : ''}` }, h('span', { class: 'goal-box', attrs: { 'aria-hidden': 'true' }, text: it.done ? '✓' : '' }), h('span', { text: it.text }));
+        li.setAttribute('aria-label', `${it.text}${it.done ? ', done' : ''}`);
+        if (it.done && before[i] && !before[i].done && !this.reducedMotion) gsap.fromTo(li, { scale: 1.08 }, { scale: 1, duration: 0.4, ease: 'back.out(3)' });
+        return li;
+      }),
     );
   }
 
