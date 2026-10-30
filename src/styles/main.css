@@ -54,6 +54,14 @@ body {
   pointer-events: auto;
 }
 
+/* Full-screen layers that only show things: touches must fall through to the world. */
+#ui > .bubble-layer,
+#ui > .fade,
+#ui > .hud,
+#ui > .touch-ui {
+  pointer-events: none;
+}
+
 .hand {
   font-family: var(--hand);
 }
