@@ -8,7 +8,7 @@ export const crew: CrewMember[] = [
   {
     id: 'paulo',
     name: 'Paulo',
-    colors: { top: '#e9846b', bottom: '#4f6d8f', hair: '#3b2a22', skin: '#e8b48f', accent: '#f6d36b' },
+    colors: { top: '#e9846b', bottom: '#4f6d8f', hair: '#16120f', skin: '#c48a5f', accent: '#f6d36b' },
     hairStyle: 'short',
     accessory: 'cap',
     heightScale: 1.04,
@@ -23,7 +23,7 @@ export const crew: CrewMember[] = [
   {
     id: 'annette',
     name: 'Annette',
-    colors: { top: '#7cc4a4', bottom: '#f3efe2', hair: '#c98b4f', skin: '#f2c9a8', accent: '#e86f8e' },
+    colors: { top: '#7cc4a4', bottom: '#f3efe2', hair: '#dcb25e', skin: '#f2c9a8', accent: '#e86f8e' },
     hairStyle: 'bob',
     accessory: 'camera',
     heightScale: 0.97,
@@ -38,7 +38,7 @@ export const crew: CrewMember[] = [
   {
     id: 'huw',
     name: 'Huw',
-    colors: { top: '#6f86c9', bottom: '#8a6b4e', hair: '#a8532e', skin: '#f0c4a0', accent: '#f2f0ea' },
+    colors: { top: '#6f86c9', bottom: '#8a6b4e', hair: '#2f241e', skin: '#f3cfb4', accent: '#f2f0ea' },
     hairStyle: 'curly',
     accessory: 'backpack',
     heightScale: 1.08,
@@ -53,7 +53,7 @@ export const crew: CrewMember[] = [
   {
     id: 'romy',
     name: 'Romy',
-    colors: { top: '#f0b84c', bottom: '#5a7a5c', hair: '#2a2420', skin: '#c99272', accent: '#7fd6cf' },
+    colors: { top: '#f0b84c', bottom: '#5a7a5c', hair: '#f1dfa6', skin: '#f3cdb0', accent: '#7fd6cf' },
     hairStyle: 'ponytail',
     accessory: 'tote',
     heightScale: 0.95,
