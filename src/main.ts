@@ -99,6 +99,8 @@ class Game {
   private walked = 0;
   private benchSatThisSit = false;
   private lastSettings: Settings | null = null;
+  /** Warm lamplight that keeps the friends' faces readable at night. */
+  private crewLight = new THREE.PointLight('#ffd2a0', 0, 11, 1.3);
   perf: PerfOverlay | null = null;
 
   constructor(s: Systems) {
@@ -131,6 +133,7 @@ class Game {
     s.dayNight.onPhase = (phase) => this.say(`time:${phase}`, PRIORITY.ambient, undefined, 0);
     s.crew.leader.character.onStep = () => this.footstep();
 
+    s.scene.add(this.crewLight);
     s.settings.subscribe((v) => this.applySettings(v));
     const lead = s.crew.leader;
     s.rig.snapTo(lead.mover.x, groundY(lead.mover.x, lead.mover.z), lead.mover.z);
@@ -287,6 +290,8 @@ class Game {
     s.interactables.group.visible = !onTitle;
     s.dayNight.apply();
     s.dayNight.followLight(leadPos.x, leadPos.z);
+    this.crewLight.position.set(leadPos.x, leadPos.y + 4.2, leadPos.z + 1.5);
+    this.crewLight.intensity = s.dayNight.night * 10;
     s.scenery.update(this.decorTime);
     s.interactables.update(this.decorTime, this.reducedMotion);
     this.updatePrompt();
@@ -419,6 +424,15 @@ class Game {
 
   // --- Actions ----------------------------------------------------------------
 
+  /** Controller left/right adjusts a focused slider. */
+  private nudgeSlider(dir: 1 | -1): void {
+    const el = document.activeElement;
+    if (!(el instanceof HTMLInputElement) || el.type !== 'range') return;
+    if (dir > 0) el.stepUp();
+    else el.stepDown();
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   private clickFocused(): void {
     const el = document.activeElement;
     if (el instanceof HTMLButtonElement) el.click();
@@ -453,6 +467,7 @@ class Game {
           if (!this.pause?.back()) void this.closePause();
         } else if (action === 'up') this.pause?.nav(-1);
         else if (action === 'down') this.pause?.nav(1);
+        else if (action === 'left' || action === 'right') this.nudgeSlider(action === 'left' ? -1 : 1);
         else if (action === 'interact' && s.input.device === 'gamepad') this.clickFocused();
         break;
       default:

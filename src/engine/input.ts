@@ -3,7 +3,18 @@
  * queued and consumed once, so a press is never handled twice or lost.
  */
 
-export type Action = 'interact' | 'pause' | 'back' | 'resetCamera' | 'switchFriend' | 'devOverlay' | 'confirm' | 'up' | 'down';
+export type Action =
+  | 'interact'
+  | 'pause'
+  | 'back'
+  | 'resetCamera'
+  | 'switchFriend'
+  | 'devOverlay'
+  | 'confirm'
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right';
 
 const KEY_ACTIONS: Record<string, Action> = {
   KeyE: 'interact',
@@ -134,6 +145,8 @@ export class Input {
       [11, 'resetCamera'],
       [12, 'up'],
       [13, 'down'],
+      [14, 'left'],
+      [15, 'right'],
     ];
     for (const [index, action] of map) {
       const pressed = !!pad.buttons[index]?.pressed;

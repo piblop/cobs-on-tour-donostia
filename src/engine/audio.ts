@@ -39,6 +39,13 @@ function noiseBuffer(ctx: AudioContext, seconds: number, kind: 'white' | 'brown'
       data[i] = (b0 + b1 + b2 + w * 0.1848) * 0.11;
     }
   }
+  // Crossfade the tail into the head so the loop has no seam or click.
+  const fade = Math.floor(ctx.sampleRate * 0.3);
+  for (let i = 0; i < fade; i++) {
+    const t = i / fade;
+    const j = length - fade + i;
+    data[j] = data[j] * (1 - t) + data[i] * t;
+  }
   return buf;
 }
 
@@ -73,6 +80,9 @@ export class AudioEngine {
   private padVoices: OscillatorNode[] = [];
   private settings: Settings | null = null;
   private suspended = false;
+  private ducked = false;
+  private echoIn!: GainNode;
+  private sources: AudioScheduledSourceNode[] = [];
 
   get started(): boolean {
     return this.ctx !== null;
@@ -113,12 +123,19 @@ export class AudioEngine {
     surfLp.type = 'lowpass';
     surfLp.frequency.value = 700;
     this.loop(brown).connect(surfLp).connect(this.surfSwell).connect(this.surfGain).connect(this.ambience);
-    const swellLfo = ctx.createOscillator();
-    swellLfo.frequency.value = 0.11;
-    const swellDepth = ctx.createGain();
-    swellDepth.gain.value = 0.38;
-    swellLfo.connect(swellDepth).connect(this.surfSwell.gain);
-    swellLfo.start();
+    // Two incommensurate swells, so the waves never fall into an obvious beat.
+    for (const [rate, depth] of [
+      [0.11, 0.3],
+      [0.067, 0.16],
+    ]) {
+      const swellLfo = ctx.createOscillator();
+      swellLfo.frequency.value = rate;
+      const swellDepth = ctx.createGain();
+      swellDepth.gain.value = depth;
+      swellLfo.connect(swellDepth).connect(this.surfSwell.gain);
+      swellLfo.start();
+      this.sources.push(swellLfo);
+    }
     // A brighter hiss on the wash of each wave.
     const wash = ctx.createBiquadFilter();
     wash.type = 'bandpass';
@@ -158,6 +175,7 @@ export class AudioEngine {
       g.gain.value = depth;
       lfo.connect(g).connect(babble.gain);
       lfo.start();
+      this.sources.push(lfo);
     }
 
     // Night shimmer: a very quiet high band, like distant insects.
@@ -180,7 +198,18 @@ export class AudioEngine {
       osc.connect(g).connect(this.music);
       osc.start();
       this.padVoices.push(osc);
+      this.sources.push(osc);
     }
+
+    // One shared echo for the plucks, so notes never leave nodes behind.
+    this.echoIn = ctx.createGain();
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.38;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.32;
+    this.echoIn.connect(delay);
+    delay.connect(fb).connect(delay);
+    delay.connect(this.music);
 
     if (this.settings) this.applySettings(this.settings);
     this.fadeMaster(1, 2.5);
@@ -196,8 +225,9 @@ export class AudioEngine {
     const src = this.ctx!.createBufferSource();
     src.buffer = buffer;
     src.loop = true;
-    src.loopStart = Math.random() * buffer.duration * 0.5;
-    src.start(0, Math.random() * buffer.duration);
+    // Seamless buffer: loop the whole thing, starting somewhere different each time.
+    src.start(0, Math.random() * buffer.duration * 0.9);
+    this.sources.push(src);
     return src;
   }
 
@@ -217,7 +247,7 @@ export class AudioEngine {
     const set = (p: AudioParam, v: number) => p.setTargetAtTime(v, now, 0.08);
     set(this.master.gain, s.muted || this.suspended ? 0 : s.volumes.master);
     set(this.music.gain, s.volumes.music * 0.9);
-    set(this.ambience.gain, s.volumes.ambience);
+    set(this.ambience.gain, s.volumes.ambience * (this.ducked ? 0.45 : 1));
     set(this.sfx.gain, s.volumes.effects);
   }
 
@@ -236,7 +266,24 @@ export class AudioEngine {
   }
 
   /** Menus and cinematics duck the world a little. */
+  /** Stop everything and release the audio device. */
+  dispose(): void {
+    if (!this.ctx) return;
+    for (const s of this.sources) {
+      try {
+        s.stop();
+      } catch {
+        // already stopped
+      }
+      s.disconnect();
+    }
+    this.sources = [];
+    void this.ctx.close();
+    this.ctx = null;
+  }
+
   setDucked(ducked: boolean): void {
+    this.ducked = ducked;
     if (!this.ctx) return;
     this.ambience.gain.setTargetAtTime((this.settings?.volumes.ambience ?? 0.8) * (ducked ? 0.45 : 1), this.ctx.currentTime, 0.25);
   }
@@ -291,22 +338,15 @@ export class AudioEngine {
     g.gain.setValueAtTime(0, when);
     g.gain.linearRampToValueAtTime(level, when + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0008, when + 2.2);
-    const delay = ctx.createDelay(1);
-    delay.delayTime.value = 0.38;
-    const fb = ctx.createGain();
-    fb.gain.value = 0.32;
     osc.connect(g);
     g.connect(this.music);
-    g.connect(delay);
-    delay.connect(fb).connect(delay);
-    delay.connect(this.music);
+    g.connect(this.echoIn);
     osc.start(when);
     osc.stop(when + 2.4);
-    // Disconnect the echo once it has died away.
-    window.setTimeout(() => {
-      delay.disconnect();
-      fb.disconnect();
-    }, 6000);
+    osc.onended = () => {
+      osc.disconnect();
+      g.disconnect();
+    };
   }
 
   private gull(): void {

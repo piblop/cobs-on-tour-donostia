@@ -113,10 +113,7 @@ export class Character {
     const smile = add(this.head, new THREE.TorusGeometry(0.07, 0.016, 5, 10, Math.PI), dark, false);
     smile.position.set(0, -0.08, 0.315);
     smile.rotation.z = Math.PI;
-    // A little accent: scarf for everyone, in their signature colour.
-    const scarf = add(this.body, new THREE.TorusGeometry(0.22, 0.07, 6, 14), accent, false);
-    scarf.rotation.x = Math.PI / 2;
-    scarf.position.y = 1.22;
+    this.buildAccessory(member.accessory, accent, dark, add);
 
     this.body.add(this.head);
     this.root.add(this.body);
@@ -132,6 +129,45 @@ export class Character {
     this.root.add(blob);
   }
 
+  private buildAccessory(
+    kind: CrewMember['accessory'],
+    accent: THREE.Material,
+    dark: THREE.Material,
+    add: (p: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, o?: boolean) => THREE.Mesh,
+  ): void {
+    if (kind === 'cap') {
+      // Paulo: a flat cap with a peak, the map-reader's hat.
+      const crown = add(this.head, new THREE.CylinderGeometry(0.34, 0.37, 0.14, 16), accent);
+      crown.position.y = 0.3;
+      const peak = add(this.head, new THREE.BoxGeometry(0.42, 0.04, 0.26), accent, false);
+      peak.position.set(0, 0.25, 0.32);
+      peak.rotation.x = 0.15;
+    } else if (kind === 'camera') {
+      // Annette: camera on a strap, ready for the photo.
+      const strap = add(this.body, new THREE.TorusGeometry(0.31, 0.025, 4, 18), dark, false);
+      strap.rotation.set(0.35, 0, 0.5);
+      strap.position.set(0, 1.0, 0.04);
+      const cam = add(this.body, new THREE.BoxGeometry(0.26, 0.18, 0.12), dark);
+      cam.position.set(0.04, 0.84, 0.31);
+      const lens = add(this.body, new THREE.CylinderGeometry(0.06, 0.06, 0.08, 10), accent, false);
+      lens.rotation.x = Math.PI / 2;
+      lens.position.set(0.04, 0.84, 0.39);
+    } else if (kind === 'backpack') {
+      // Huw: a roomy backpack (snacks, mostly).
+      const pack = add(this.body, new THREE.BoxGeometry(0.46, 0.5, 0.24), accent);
+      pack.position.set(0, 0.92, -0.34);
+      const flap = add(this.body, new THREE.BoxGeometry(0.48, 0.14, 0.26), dark, false);
+      flap.position.set(0, 1.13, -0.34);
+    } else {
+      // Romy: a tote bag on one shoulder.
+      const bag = add(this.body, new THREE.BoxGeometry(0.1, 0.36, 0.34), accent);
+      bag.position.set(-0.4, 0.66, 0.02);
+      const handle = add(this.body, new THREE.TorusGeometry(0.2, 0.02, 4, 12, Math.PI), dark, false);
+      handle.rotation.set(0, Math.PI / 2, 0);
+      handle.position.set(-0.4, 0.84, 0.02);
+    }
+  }
+
   private buildHair(
     style: CrewMember['hairStyle'],
     hair: THREE.Material,
@@ -141,18 +177,28 @@ export class Character {
     cap.rotation.x = -0.25;
     cap.position.y = 0.04;
     if (style === 'bob') {
-      const bob = add(this.head, new THREE.CylinderGeometry(0.37, 0.4, 0.34, 16, 1, true, Math.PI * 0.75, Math.PI * 1.5), hair, false);
-      bob.position.y = -0.06;
+      // A full, wide bob that reads from above.
+      const bob = add(this.head, new THREE.SphereGeometry(0.43, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hair);
+      bob.scale.set(1.08, 0.95, 1.05);
+      bob.position.set(0, 0.02, -0.04);
+      const fringe = add(this.head, new THREE.BoxGeometry(0.5, 0.1, 0.12), hair, false);
+      fringe.position.set(0, 0.2, 0.28);
     } else if (style === 'curly') {
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
-        const curl = add(this.head, new THREE.SphereGeometry(0.12, 8, 6), hair, false);
-        curl.position.set(Math.cos(a) * 0.26, 0.2 + Math.sin(i * 1.7) * 0.04, Math.sin(a) * 0.24 - 0.04);
+      // A big mop of curls: the tallest head in the crew.
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const curl = add(this.head, new THREE.SphereGeometry(0.15, 8, 6), hair, false);
+        curl.position.set(Math.cos(a) * 0.27, 0.24 + Math.sin(i * 1.7) * 0.05, Math.sin(a) * 0.25 - 0.05);
       }
+      const crown = add(this.head, new THREE.SphereGeometry(0.2, 8, 6), hair, false);
+      crown.position.set(0, 0.38, -0.04);
     } else if (style === 'ponytail') {
-      const tail = add(this.head, new THREE.CapsuleGeometry(0.08, 0.25, 3, 8), hair);
-      tail.position.set(0, 0.0, -0.36);
-      tail.rotation.x = 0.5;
+      // High bun plus a long swinging ponytail.
+      const bun = add(this.head, new THREE.SphereGeometry(0.15, 10, 8), hair);
+      bun.position.set(0, 0.36, -0.18);
+      const tail = add(this.head, new THREE.CapsuleGeometry(0.1, 0.42, 3, 8), hair);
+      tail.position.set(0, 0.08, -0.42);
+      tail.rotation.x = 0.55;
     }
   }
 
