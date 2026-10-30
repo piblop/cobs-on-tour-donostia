@@ -13,6 +13,8 @@ export interface SceneContext {
   rig: CameraRig;
   crew: Crew;
   seats: Array<{ x: number; z: number; heading: number }>;
+  /** Hide or show the table parasol (it hides faces from the meal camera). */
+  setParasol: (visible: boolean) => void;
   reducedMotion: () => boolean;
   fade: (to: number, seconds: number) => Promise<void>;
   /** Show a single line in a speech bubble. */
@@ -29,8 +31,9 @@ const TABLE_TOP = PROMENADE_Y + 1.0;
 /** The camera framing for the terrace table. */
 export function tableShot(): { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } } {
   return {
-    position: { x: TERRACE_TABLE.x + 2.4, y: PROMENADE_Y + 4.6, z: TERRACE_TABLE.z + 4.4 },
-    target: { x: TERRACE_TABLE.x, y: TABLE_TOP + 0.2, z: TERRACE_TABLE.z },
+    // Between two chairs, low enough to see faces and plates rather than the tops of heads.
+    position: { x: TERRACE_TABLE.x + 0.3, y: PROMENADE_Y + 3.3, z: TERRACE_TABLE.z + 3.9 },
+    target: { x: TERRACE_TABLE.x, y: TABLE_TOP + 0.35, z: TERRACE_TABLE.z - 0.2 },
   };
 }
 
@@ -49,6 +52,7 @@ export async function serveMeal(ctx: SceneContext, foods: FoodDef[]): Promise<Me
   const rm = ctx.reducedMotion();
   await ctx.fade(0.92, rm ? 0.05 : 0.3);
   ctx.crew.seatAround(ctx.seats);
+  ctx.setParasol(false);
   await ctx.rig.glideTo(tableShot(), 0.01);
   await ctx.fade(0, rm ? 0.05 : 0.4);
 
@@ -95,6 +99,7 @@ export async function serveMeal(ctx: SceneContext, foods: FoodDef[]): Promise<Me
       for (const d of dishes) d.dispose();
       dishes.length = 0;
       ctx.crew.standAt(at.x, at.z, at.heading);
+      ctx.setParasol(true);
       ctx.rig.cancelCinematic();
       const lead = ctx.crew.leader.mover;
       ctx.rig.snapTo(lead.x, PROMENADE_Y, lead.z);

@@ -11,6 +11,7 @@ export interface BarDressing {
   group: THREE.Group;
   /** Warm doorway glow, brighter at night. */
   doorGlow: THREE.MeshBasicMaterial;
+  parasol: THREE.Object3D;
   /** Seats around the terrace table, as positions and facing angles. */
   seats: Array<{ x: number; z: number; heading: number }>;
   dispose(): void;
@@ -140,6 +141,7 @@ export function createBars(): BarDressing {
   return {
     group,
     doorGlow,
+    parasol,
     seats,
     dispose() {
       for (const g of geos) g.dispose();

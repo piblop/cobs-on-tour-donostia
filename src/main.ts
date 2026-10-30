@@ -41,6 +41,7 @@ import { wishes } from './data/wishes.ts';
 import { crew as crewData } from './data/crew.ts';
 import { SaveStore, dataUrlToBlob, type PhotoMeta, type ScrapbookPage, type TripData } from './engine/save.ts';
 import { createBars, type BarDressing } from './world/bars.ts';
+import { cutaway } from './world/materials.ts';
 import { bayPoint } from './world/map.ts';
 import { serveMeal, type SceneContext } from './scenes/meal.ts';
 import { showArrivalTicket, choose, toast } from './ui/story.ts';
@@ -295,6 +296,8 @@ class Game {
       this.say(`area:${area.id}`, PRIORITY.ambient, undefined, 40);
       const tight = area.id === 'parte-vieja' || area.id === 'plaza';
       s.rig.setAreaFraming(tight ? 0.2 : 0, tight ? 0.8 : 1);
+      // Wider see-through hole among the old town's tall houses.
+      cutaway.uCutRadius.value = tight ? 5.2 : 3.6;
     }
     this.checkSunset(dt, speed);
   };
@@ -1014,6 +1017,9 @@ class Game {
       rig: s.rig,
       crew: s.crew,
       seats: s.bars.seats,
+      setParasol: (v) => {
+        s.bars.parasol.visible = v;
+      },
       reducedMotion: () => this.reducedMotion,
       fade: (to, seconds) => new Promise<void>((resolve) => void gsap.to(this.fade, { opacity: to, duration: seconds, onComplete: () => resolve() })),
       line: (speaker, text) => {

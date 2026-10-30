@@ -24,7 +24,9 @@ export function makeDish(food: FoodDef): Dish {
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0) => {
     const mesh = new THREE.Mesh(g(geo), mat);
     mesh.position.set(x, y, z);
-    mesh.castShadow = true;
+    // Only the plate and big pieces cast shadows; tiny ingredients would be invisible cost.
+    geo.computeBoundingSphere();
+    mesh.castShadow = (geo.boundingSphere?.radius ?? 0) > 0.12;
     group.add(mesh);
     return mesh;
   };
@@ -85,7 +87,6 @@ export function makeDish(food: FoodDef): Dish {
         const p = add(new THREE.CapsuleGeometry(0.035, 0.14, 3, 6), m(i % 3 ? c.base : c.topping), Math.cos(i * 2.1) * 0.13, 0.08, Math.sin(i * 2.1) * 0.13);
         p.rotation.set(Math.PI / 2, 0, i * 0.9);
       }
-      for (let i = 0; i < 12; i++) add(new THREE.BoxGeometry(0.012, 0.012, 0.012), white, Math.cos(i) * 0.15, 0.13, Math.sin(i * 1.7) * 0.15);
       break;
     }
     case 'tomato-salad': {
@@ -133,11 +134,11 @@ export function makeDish(food: FoodDef): Dish {
   const hot = ['mushroom', 'clams', 'cheek', 'txuleta', 'peppers', 'tortilla'].includes(food.model);
   if (hot) {
     const puff = g(new THREE.SphereGeometry(0.06, 8, 6));
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false });
       mats.push(mat);
       const s = new THREE.Mesh(puff, mat);
-      s.userData.phase = i / 4;
+      s.userData.phase = i / 2;
       group.add(s);
       steam.push(s);
     }
@@ -152,6 +153,44 @@ export function makeDish(food: FoodDef): Dish {
       for (const x of mats) x.dispose();
     },
   };
+}
+
+const thumbCache = new Map<string, string>();
+let thumbRenderer: THREE.WebGLRenderer | null = null;
+
+/**
+ * A small rendered picture of a dish for menus and the tray, made once per
+ * food with one shared offscreen renderer and cached as a data URL.
+ */
+export function foodThumbnail(food: FoodDef): string {
+  const cached = thumbCache.get(food.id);
+  if (cached) return cached;
+  try {
+    if (!thumbRenderer) {
+      thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      thumbRenderer.setSize(160, 120, false);
+      thumbRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      thumbRenderer.toneMapping = THREE.NeutralToneMapping;
+    }
+    const scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xfff6e8, 0xe8d8c4, 2.2));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(1.5, 3, 2);
+    scene.add(key);
+    const dish = makeDish(food);
+    scene.add(dish.group);
+    const cam = new THREE.PerspectiveCamera(30, 160 / 120, 0.05, 20);
+    cam.position.set(0, 0.95, 1.1);
+    cam.lookAt(0, 0.1, 0);
+    thumbRenderer.setClearColor(0xfbf3e3, 1);
+    thumbRenderer.render(scene, cam);
+    const url = thumbRenderer.domElement.toDataURL('image/png');
+    dish.dispose();
+    thumbCache.set(food.id, url);
+    return url;
+  } catch {
+    return '';
+  }
 }
 
 /** Animate steam puffs for a dish. */

@@ -87,6 +87,7 @@ export function showPlanning(
     };
 
     const count = h('p', { class: 'plan-count', attrs: { 'aria-live': 'polite' } });
+    const legend = h('ol', { class: 'plan-legend', attrs: { 'aria-label': 'Pinned plans in order' } });
     const cards = offered.map(({ wish, friend }) => {
       const card = h(
         'button',
@@ -111,6 +112,15 @@ export function showPlanning(
         (card.querySelector('.wish-pin') as HTMLElement).textContent = on ? `Pinned ${pinned.indexOf(wish.id) + 1}` : 'Pin it';
       }
       count.textContent = `${pinned.length} of ${MAX_PINNED_WISHES} pinned. Plans are suggestions: change your mind any time.`;
+      legend.replaceChildren(
+        ...(pinned.length
+          ? pinned.map((id) => {
+              const o = offered.find((x) => x.wish.id === id);
+              return h('li', { text: `${PIN_FOR[id]?.label ?? 'Somewhere nice'}: ${o?.friend.name ?? ''}’s wish` });
+            })
+          : [h('li', { class: 'muted', text: 'Nothing pinned yet. Wandering is also a plan.' })]),
+      );
+      map.setAttribute('aria-label', `A hand-drawn map of the bay. ${pinned.length ? `Route: hotel, then ${pinned.map((id) => PIN_FOR[id]?.label ?? 'somewhere').join(', then ')}.` : 'No route yet.'}`);
       drawRoute();
     };
 
@@ -119,7 +129,7 @@ export function showPlanning(
       'div',
       { class: 'plan paper', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'plan-title' } },
       h('h2', { id: 'plan-title', class: 'plan-title', text: `Day ${day} · Morning plans` }),
-      h('div', { class: 'plan-grid' }, h('div', { class: 'plan-map-wrap' }, map), h('div', { class: 'plan-wishes' }, ...cards.map((c) => c.card))),
+      h('div', { class: 'plan-grid' }, h('div', { class: 'plan-map-wrap' }, map, legend), h('div', { class: 'plan-wishes' }, ...cards.map((c) => c.card))),
       count,
       tips.length ? h('ul', { class: 'plan-tips' }, ...tips.map((t) => h('li', { text: t }))) : null,
       h('div', { class: 'ticket-actions' }, go),
