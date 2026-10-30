@@ -300,6 +300,27 @@ export class Crew {
     this.syncPrev();
   }
 
+  /** Seat the four friends on chairs (e.g. around the terrace table). */
+  seatAround(seats: Array<{ x: number; z: number; heading: number }>): void {
+    const order = [this.leader, ...this.followers];
+    order.forEach((m, i) => {
+      const seat = seats[i % seats.length];
+      m.seat = seat;
+      Object.assign(m.mover, { x: seat.x, z: seat.z, vx: 0, vz: 0, heading: seat.heading });
+      m.character.seated = true;
+    });
+    this.syncPrev();
+  }
+
+  /** Stand everyone up at a spot (leaving a scene). */
+  standAt(x: number, z: number, heading: number): void {
+    for (const m of this.members) {
+      m.seat = null;
+      m.character.seated = false;
+    }
+    this.teleport(x, z, heading);
+  }
+
   standUp(): void {
     const lead = this.leader;
     const fwdAngle = lead.mover.heading;

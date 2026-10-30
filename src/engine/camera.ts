@@ -53,6 +53,16 @@ export class CameraRig {
   private cine = { px: 0, py: 0, pz: 0, tx: 0, ty: 0, tz: 0 };
   private probe = new THREE.Vector3();
   reducedMotion = false;
+  /** Area framing: narrow lanes get a higher, closer view. */
+  private areaPitch = 0;
+  private areaScale = 1;
+  private targetAreaPitch = 0;
+  private targetAreaScale = 1;
+
+  setAreaFraming(pitchAdd: number, distanceScale: number): void {
+    this.targetAreaPitch = pitchAdd;
+    this.targetAreaScale = distanceScale;
+  }
 
   constructor(private occluders: BuildingDef[]) {
     this.camera = new THREE.PerspectiveCamera(34, 1, 0.5, 900);
@@ -114,9 +124,12 @@ export class CameraRig {
 
   private placeFollow(dt: number): void {
     const k = 1 - Math.exp(-tune.zoomSmoothing * dt);
-    this.distance += (this.targetDistance - this.distance) * k;
+    const ka = 1 - Math.exp(-2.5 * dt);
+    this.areaPitch += (this.targetAreaPitch - this.areaPitch) * ka;
+    this.areaScale += (this.targetAreaScale - this.areaScale) * ka;
+    this.distance += (this.targetDistance * this.areaScale - this.distance) * k;
     this.yaw += (this.targetYaw - this.yaw) * (1 - Math.exp(-10 * dt));
-    const base = this.pitchFor(this.distance);
+    const base = this.pitchFor(this.distance) + this.areaPitch;
     const wantLift = this.clearPitch(base);
     this.pitchLift += (wantLift - this.pitchLift) * (1 - Math.exp(-6 * dt));
     if (wantLift > this.pitchLift) this.pitchLift = Math.max(this.pitchLift, wantLift - 0.04);

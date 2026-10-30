@@ -50,7 +50,18 @@ To add a new named area (for the banner that appears on entry), add it to `areas
 
 ## Add a food
 
-*Arrives in M3/M4 (`src/data/foods.ts`).* Each food will have an id, name, description, the bar it is found at, crew reactions and an alcohol-free flag, with real-world details carrying a `FactCheck`.
+Edit `src/data/foods.ts`, then add the id to a bar's `menu` in `src/data/restaurants.ts`.
+
+- `model` picks the procedural 3D dish (`gilda`, `mushroom`, `clams`, `cheek`, `anchovy`, `peppers`, `tomato-salad`, `txuleta`, `tortilla`, `cheesecake`, `drink`) and `colours` tints it.
+- Every friend needs a `reactions` line, drinks included. Alcohol-free options deserve reactions just as warm.
+- `rating` is the conversational label shown in the Pintxo-dex ("Romy's favourite", "Unexpected hit").
+- Put any real-world claim in `fact` with `needsReview: true`, then run `npm run factcheck`.
+
+Bars are fictional names inspired by real places (`inspiredBy`). Keep real opening times and prices out of the game.
+
+## Add a wish
+
+Edit `src/data/wishes.ts`. A wish belongs to one friend and is done by tasting a food (`{ food: id }`) or when a memory happens (`{ memory: "sat:bench" }`). Each morning every friend offers one, and the player pins up to three.
 
 ## Add a banter line
 
@@ -86,7 +97,7 @@ Use first names only and keep personalities affectionate and fictional. Don't ad
 
 ## Add a minigame configuration
 
-*Arrives with the first minigame in M3 (`src/data/tuning.ts`).* Timing windows, relaxed-timing multipliers and one-button alternatives will live here so they can be tuned without touching engine code.
+Mini-game timing lives in `minigameTuning` in `src/data/tuning.ts`. For the Pintxos Crawl: `eyeSpeed` and `eyeWindow` (and `eyeWindowRelaxed`) shape the catch-the-eye timing, `eyeMaxMisses` is how many misses before the bartender comes anyway, `pickCycle` sets the one-button highlight speed, and `carrySeconds`, `carryDrift` and `carryControl` tune the tray. `relaxedScale` slows everything when Relaxed timing is on. Every mini-game must stay skippable, forgiving and under two minutes.
 
 ## Feel and camera tuning
 

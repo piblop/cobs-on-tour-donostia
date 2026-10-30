@@ -36,6 +36,25 @@ export const camera = {
   lookHeight: 1.4,
 } as const;
 
+/** Mini-game timing. Relaxed timing scales speeds down and windows up. */
+export const minigameTuning = {
+  crawl: {
+    /** Marker sweeps per second across the bartender track. */
+    eyeSpeed: 0.75,
+    /** Fraction of the track that counts as "looking your way". */
+    eyeWindow: 0.22,
+    eyeWindowRelaxed: 0.36,
+    /** After this many misses the bartender comes over anyway. */
+    eyeMaxMisses: 3,
+    /** One-button mode: seconds the highlight rests on each dish. */
+    pickCycle: 1.3,
+    carrySeconds: 10,
+    carryDrift: 1.1,
+    carryControl: 2.4,
+    relaxedScale: 1.6,
+  },
+} as const;
+
 export const interaction = {
   /** Repeat visits skip the glide and show the polaroid quickly. */
   repeatCardDelay: 0.15,

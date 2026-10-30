@@ -20,6 +20,8 @@ import {
   type BuildingDef,
 } from './map.ts';
 
+import { TERRACE_TABLE } from '../data/restaurants.ts';
+
 export interface Segment {
   ax: number;
   az: number;
@@ -249,6 +251,8 @@ export function buildCollisionWorld(buildings: BuildingDef[] = buildingLayout())
     world.addBox(b.x, b.z, b.width, b.depth, b.rotation);
   }
   world.addCircle(CAROUSEL.x, CAROUSEL.z, CAROUSEL.radius);
+  // The terrace table and its chairs in the square.
+  world.addCircle(TERRACE_TABLE.x, TERRACE_TABLE.z, 1.95);
   for (const p of propLayout()) world.addCircle(p.x, p.z, PROP_RADIUS[p.kind] * p.scale);
   return world;
 }

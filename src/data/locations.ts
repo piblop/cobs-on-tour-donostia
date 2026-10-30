@@ -6,6 +6,13 @@ import type { Area, LocationDef } from './types.ts';
  */
 export const areas: Area[] = [
   {
+    id: 'plaza',
+    name: 'Plaza de la Constitución',
+    subtitle: 'balconies all round, bars on every side',
+    bounds: { minX: 72, maxX: 85, minZ: 2, maxZ: 15 },
+    priority: 0,
+  },
+  {
     id: 'parte-vieja',
     name: 'Parte Vieja',
     subtitle: 'the old town, all lanes and chatter',

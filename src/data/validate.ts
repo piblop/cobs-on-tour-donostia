@@ -4,6 +4,10 @@
  */
 import { areas, locations } from './locations.ts';
 import { crew, playerDefaultId } from './crew.ts';
+import { foods } from './foods.ts';
+import { bars } from './restaurants.ts';
+import { wishes } from './wishes.ts';
+import { banter } from './banter.ts';
 import type { FactCheck } from './types.ts';
 
 export interface ContentIssue {
@@ -86,6 +90,49 @@ export function validateContent(): ContentIssue[] {
     if (c.catchphrases.length === 0) issues.push({ table: 'crew', id: c.id, message: 'needs at least one catchphrase' });
   }
 
+  const crewIds = new Set(crew.map((c) => c.id));
+  const barIds = new Set(bars.map((b) => b.id));
+  const foodIds = new Set(foods.map((f) => f.id));
+
+  checkUnique('foods', foods.map((f) => f.id), issues);
+  for (const food of foods) {
+    const t = 'foods';
+    if (!barIds.has(food.barId)) issues.push({ table: t, id: food.id, message: `unknown bar "${food.barId}"` });
+    if (!food.name.trim() || !food.description.trim()) issues.push({ table: t, id: food.id, message: 'name and description are required' });
+    for (const id of crewIds) {
+      if (!food.reactions[id]?.trim()) issues.push({ table: t, id: food.id, message: `missing reaction for ${id}` });
+    }
+    for (const [k, v] of Object.entries(food.colours)) {
+      if (!/^#[0-9a-f]{6}$/i.test(v)) issues.push({ table: t, id: food.id, message: `colour ${k} must be #rrggbb` });
+    }
+    checkFact(t, food.id, food.fact, issues);
+  }
+  if (!foods.some((f) => f.alcoholFree && f.model === 'drink')) issues.push({ table: 'foods', id: '*', message: 'needs at least one alcohol-free drink' });
+
+  checkUnique('bars', bars.map((b) => b.id), issues);
+  for (const bar of bars) {
+    if (!inWorld(bar.door.x, bar.door.z)) issues.push({ table: 'bars', id: bar.id, message: 'door outside the world' });
+    if (bar.menu.length === 0) issues.push({ table: 'bars', id: bar.id, message: 'menu is empty' });
+    for (const m of bar.menu) if (!foodIds.has(m)) issues.push({ table: 'bars', id: bar.id, message: `menu item "${m}" is not a food` });
+  }
+
+  checkUnique('wishes', wishes.map((w) => w.id), issues);
+  for (const w of wishes) {
+    if (!crewIds.has(w.friend)) issues.push({ table: 'wishes', id: w.id, message: `unknown friend "${w.friend}"` });
+    if ('food' in w.done && !foodIds.has(w.done.food)) issues.push({ table: 'wishes', id: w.id, message: `unknown food "${w.done.food}"` });
+    if ('memory' in w.done && !/^[a-z]+:[a-z0-9-]+$/.test(w.done.memory)) issues.push({ table: 'wishes', id: w.id, message: 'memory key must look like kind:id' });
+  }
+  for (const id of crewIds) {
+    if (!wishes.some((w) => w.friend === id)) issues.push({ table: 'wishes', id, message: 'every friend needs at least one wish' });
+  }
+
+  checkUnique('banter', banter.map((l) => l.id), issues);
+  for (const line of banter) {
+    if (line.beats.length === 0) issues.push({ table: 'banter', id: line.id, message: 'needs at least one beat' });
+    for (const b of line.beats) if (!b.text.trim()) issues.push({ table: 'banter', id: line.id, message: 'empty beat' });
+    if (line.context === 'callback' && !line.requiresMemory) issues.push({ table: 'banter', id: line.id, message: 'callbacks need requiresMemory' });
+  }
+
   return issues;
 }
 
@@ -95,5 +142,8 @@ export function formatIssues(issues: ContentIssue[]): string {
 
 /** Every player-visible real-world claim, for docs/FACT_CHECK.md. */
 export function collectFacts(): Array<{ table: string; id: string; name: string; fact: FactCheck }> {
-  return locations.map((l) => ({ table: 'locations', id: l.id, name: l.name, fact: l.fact }));
+  return [
+    ...locations.map((l) => ({ table: 'locations', id: l.id, name: l.name, fact: l.fact })),
+    ...foods.map((f) => ({ table: 'foods', id: f.id, name: f.name, fact: f.fact })),
+  ];
 }

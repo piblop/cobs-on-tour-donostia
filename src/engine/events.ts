@@ -6,7 +6,7 @@ export interface GameEvents {
   'state:changed': { from: GameStateName; to: GameStateName };
 }
 
-export type GameStateName = 'loading' | 'title' | 'exploring' | 'cinematic' | 'menu' | 'card';
+export type GameStateName = 'loading' | 'title' | 'exploring' | 'cinematic' | 'menu' | 'card' | 'scene' | 'minigame';
 
 type Handler<T> = (payload: T) => void;
 

@@ -1,4 +1,5 @@
 import './styles/main.css';
+import './styles/story.css';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { validateContent, formatIssues } from './data/validate.ts';
@@ -34,7 +35,18 @@ import { settingsPanel } from './ui/settings.ts';
 import { showFatal } from './ui/fatal.ts';
 import { h } from './ui/dom.ts';
 import type { PerfOverlay } from './engine/perfOverlay.ts';
-import type { LocationDef } from './data/types.ts';
+import type { BarDef, FoodDef, LocationDef } from './data/types.ts';
+import { foodById } from './data/foods.ts';
+import { wishes } from './data/wishes.ts';
+import { crew as crewData } from './data/crew.ts';
+import { SaveStore, dataUrlToBlob, type PhotoMeta, type ScrapbookPage, type TripData } from './engine/save.ts';
+import { createBars, type BarDressing } from './world/bars.ts';
+import { bayPoint } from './world/map.ts';
+import { serveMeal, type SceneContext } from './scenes/meal.ts';
+import { showArrivalTicket, choose, toast } from './ui/story.ts';
+import { showPlanning } from './ui/planning.ts';
+import { showScrapbookPage } from './ui/scrapbook.ts';
+import { playPintxosCrawl } from './minigames/pintxosCrawl.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -67,7 +79,19 @@ interface Systems {
   crew: Crew;
   dayNight: DayNight;
   settings: SettingsStore;
+  bars: BarDressing;
 }
+
+const ARRIVAL = { x0: 30, d: 12.5 };
+const MORNING_HOUR = 8.5;
+const DAY_ONE_GOAL = 'Find somewhere for pintxos tonight';
+const TIPS = [
+  'Annette’s rule: as many tomato salads as possible while in Basque country.',
+  'Annette swears by the burnt cheesecake. “Best on the planet. Non-negotiable.”',
+  'Morning txakoli is a local tradition (according to Annette).',
+  'Stuart says: one pintxo and one drink per bar, then move on.',
+  'Pack for everything: gumboots, a raincoat, and room for cheesecake.',
+];
 
 class Game {
   readonly state = new GameState();
@@ -99,6 +123,22 @@ class Game {
   private walked = 0;
   private benchSatThisSit = false;
   private lastSettings: Settings | null = null;
+  private saves = new SaveStore();
+  private foodsTried: Array<{ id: string; day: number }> = [];
+  private wishDay = { day: 0, offered: [] as string[], pinned: [] as string[] };
+  private wishesDone = new Set<string>();
+  private goal: string | null = null;
+  private goalDone = false;
+  private flags = new Set<string>();
+  private pages: ScrapbookPage[] = [];
+  private photos: PhotoMeta[] = [];
+  private photoUrls = new Map<string, string>();
+  private frameHooks = new Set<(time: number) => void>();
+  private advance: (() => void) | null = null;
+  private autoWalk: { x: number; z: number } | null = null;
+  private lateAskedDay = 0;
+  private warnedSave = false;
+  private tripStarted = false;
   /** Warm lamplight that keeps the friends' faces readable at night. */
   private crewLight = new THREE.PointLight('#ffd2a0', 0, 11, 1.3);
   perf: PerfOverlay | null = null;
@@ -112,9 +152,16 @@ class Game {
     this.fade = h('div', { class: 'fade', attrs: { 'aria-hidden': 'true' } });
     document.body.append(this.fade);
     for (const m of s.crew.members) this.needs.set(m.def.id, new Needs(m.def));
+    queueMicrotask(() => this.wire());
 
-    this.banter = new BanterDirector(banter);
-    this.banter.onSay = (e) => {
+    this.banter = this.makeDirector();
+  }
+
+  private makeDirector(): BanterDirector {
+    const s = this.s;
+    const d = new BanterDirector(banter);
+    d.readingScale = s.settings.current.relaxedTiming ? 1.35 : 1;
+    d.onSay = (e) => {
       const m = s.crew.byId(e.speaker);
       if (!m) return;
       this.bubbles.say(e.speaker, m.def.name, m.def.colors.top, e.text, e.duration, {
@@ -122,11 +169,15 @@ class Game {
         time: formatClock(s.dayNight.hour),
       });
     };
-    this.banter.onEnd = (id) => {
+    d.onEnd = (id) => {
       const line = banter.find((l) => l.id === id);
       if (line && line.beats.length > 1) this.vibe.add('funny');
     };
+    return d;
+  }
 
+  private wire(): void {
+    const s = this.s;
     s.crew.onRecover = (id) => this.say('recover', PRIORITY.ambient, id as CrewId, 60);
     s.crew.onInvestigate = (id) => this.say('investigate', PRIORITY.ambient, id as CrewId, 25);
     s.crew.pointsOfInterest = s.interactables.pointsOfInterest();
@@ -135,6 +186,7 @@ class Game {
 
     s.scene.add(this.crewLight);
     s.settings.subscribe((v) => this.applySettings(v));
+    void this.saves.open();
     const lead = s.crew.leader;
     s.rig.snapTo(lead.mover.x, groundY(lead.mover.x, lead.mover.z), lead.mover.z);
   }
@@ -186,6 +238,7 @@ class Game {
       hour: dn.hour,
       who: this.s.crew.members.map((m) => m.def.id),
     });
+    this.checkWishes();
   }
 
   private surfaceUnderLeader(): Surface {
@@ -216,7 +269,8 @@ class Game {
         intent = { x: w.x, z: w.z, brisk: raw.brisk };
       }
     }
-    const allowFollowers = this.state.gameplayActive;
+    if (this.autoWalk) intent = { x: this.autoWalk.x, z: this.autoWalk.z, brisk: false };
+    const allowFollowers = this.state.gameplayActive || this.autoWalk !== null;
     crew.step(dt, intent, allowFollowers, this.faceTarget);
     if (!this.state.gameplayActive) return;
 
@@ -227,7 +281,8 @@ class Game {
 
     // The clock only runs while exploring.
     const gameHours = (dt * clockRate(s.dayNight.hour)) / 60;
-    s.dayNight.advance(dt);
+    // The evening only ends when the player chooses, so the clock waits just before midnight.
+    if (s.dayNight.hour < 23.9) s.dayNight.advance(dt);
     for (const n of this.needs.values()) n.tick(gameHours, s.dayNight.hour, crew.seated ? 0 : speed * dt);
     this.vibe.drift(gameHours);
     if (crew.seated) for (const n of this.needs.values()) n.rest(dt * 0.02);
@@ -238,6 +293,8 @@ class Game {
       this.hud.showArea(area.name, area.subtitle);
       events.emit('area:entered', { id: area.id, name: area.name, subtitle: area.subtitle });
       this.say(`area:${area.id}`, PRIORITY.ambient, undefined, 40);
+      const tight = area.id === 'parte-vieja' || area.id === 'plaza';
+      s.rig.setAreaFraming(tight ? 0.2 : 0, tight ? 0.8 : 1);
     }
     this.checkSunset(dt, speed);
   };
@@ -293,6 +350,7 @@ class Game {
     this.crewLight.position.set(leadPos.x, leadPos.y + 4.2, leadPos.z + 1.5);
     this.crewLight.intensity = s.dayNight.night * 10;
     s.scenery.update(this.decorTime);
+    for (const fn of this.frameHooks) fn(this.decorTime);
     s.interactables.update(this.decorTime, this.reducedMotion);
     this.updatePrompt();
 
@@ -304,6 +362,10 @@ class Game {
         this.checkNeeds();
       }
       if (this.vibe.checkHigh()) this.celebrate();
+      if (s.dayNight.hour >= 22.5 && this.lateAskedDay !== s.dayNight.day && !s.crew.seated) {
+        this.lateAskedDay = s.dayNight.day;
+        void this.askLate();
+      }
     }
     this.bubbles.update(frozen ? 0 : frameDt, (id) => this.headAnchor(id));
     this.updateAudio(frameDt);
@@ -377,6 +439,7 @@ class Game {
 
   private updateHud(): void {
     const s = this.s;
+    this.hud.setGoals(this.goalItems());
     this.hud.setClock(s.dayNight.day, formatClock(s.dayNight.hour), s.dayNight.night > 0.5);
     this.hud.setVibe(this.vibe.value, this.vibe.label);
     this.hud.setCrew(
@@ -462,6 +525,9 @@ class Game {
       case 'card':
         if (action === 'interact' || action === 'pause' || action === 'back') this.cardDone?.();
         break;
+      case 'scene':
+        if (action === 'interact' || action === 'confirm' || action === 'back') this.advance?.();
+        break;
       case 'menu':
         if (action === 'pause' || action === 'back') {
           if (!this.pause?.back()) void this.closePause();
@@ -484,6 +550,7 @@ class Game {
     const spot = s.interactables.nearest(s.crew.leader.mover.x, s.crew.leader.mover.z);
     if (!spot) return;
     if (spot.kind === 'discovery') void this.discover(spot.loc);
+    else if (spot.kind === 'bar') void this.visitBar(spot.bar);
     else void this.sit(spot);
   }
 
@@ -511,10 +578,41 @@ class Game {
     this.hud.setVisible(false);
     this.bubbles.clear();
     this.state.set('title');
-    this.title = showTitle(this.s.ui, () => void this.startTrip(), this.reducedMotion, this.settingsFor);
+    void this.saves.load().then((saved) => {
+      if (this.state.name !== 'title' || this.title) return;
+      this.title = showTitle(this.s.ui, {
+        onNew: () => void this.confirmNewTrip(saved !== null),
+        onContinue: saved ? () => void this.startTrip(saved.data) : undefined,
+        continueLabel: saved ? `Continue trip · Day ${saved.data.day}` : undefined,
+        reducedMotion: this.reducedMotion,
+        settings: this.settingsFor,
+        storageNote: this.saves.available
+          ? undefined
+          : 'This browser is not letting the game save (private mode or blocked site data). You can still play.',
+      });
+      if (saved?.source === 'backup') toast(this.s.ui, 'Your latest save was damaged, so we restored the one before it.', 'warn');
+    });
   }
 
-  private async startTrip(): Promise<void> {
+  private async confirmNewTrip(hasSave: boolean): Promise<void> {
+    if (hasSave) {
+      const ok = await choose(
+        this.s.ui,
+        'Start a new trip?',
+        'This replaces the trip saved in this browser, including its scrapbook and photos.',
+        [
+          { label: 'Keep my trip', value: false },
+          { label: 'Start fresh', value: true },
+        ],
+        this.reducedMotion,
+      );
+      if (!ok) return;
+      await this.saves.clear();
+    }
+    void this.startTrip(null);
+  }
+
+  private async startTrip(saved: TripData | null): Promise<void> {
     if (this.state.name !== 'title' || !this.title) return;
     const s = this.s;
     // The click on "Start Trip" is the user gesture that unlocks audio.
@@ -524,10 +622,38 @@ class Game {
     const title = this.title;
     this.title = null;
     s.rig.resetView();
-    this.state.set('cinematic');
-    const glide = s.rig.glideFromCurrent(this.reducedMotion ? 0.3 : 1.8);
     await title.close();
+    this.resetTrip();
+    if (saved) {
+      await this.applyTrip(saved);
+    } else {
+      // Opening: the train ticket, then the crew steps out onto the promenade at golden hour.
+      this.state.set('scene');
+      await showArrivalTicket(s.ui, this.reducedMotion);
+      const p = bayPoint(ARRIVAL.x0, ARRIVAL.d);
+      s.crew.teleport(p.x, p.z, Math.PI / 2);
+      this.state.set('cinematic');
+      const tangent = { x: 0.93, z: -0.36 };
+      this.autoWalk = tangent;
+      this.goal = DAY_ONE_GOAL;
+      this.flags.add('opening');
+    }
+    this.tripStarted = true;
+    this.state.set('cinematic');
+    const glide = s.rig.glideFromCurrent(this.reducedMotion ? 0.3 : 2.2);
     await glide;
+    this.autoWalk = null;
+    if (import.meta.env.DEV) {
+      // Dev only: ?hour=21.5 overrides the starting time after a new trip resets it.
+      const devHour = Number(new URLSearchParams(location.search).get('hour'));
+      if (Number.isFinite(devHour) && devHour > 0) s.dayNight.setTime(devHour);
+      // Dev only: ?spawn=x,z starts the crew somewhere specific for testing.
+      const sp = new URLSearchParams(location.search).get('spawn')?.split(',').map(Number);
+      if (sp && sp.length === 2 && sp.every(Number.isFinite)) {
+        s.crew.teleport(sp[0], sp[1], Math.PI / 2);
+        s.rig.snapTo(sp[0], groundY(sp[0], sp[1]), sp[1]);
+      }
+    }
     this.state.set('exploring');
     s.renderer.canvas.focus({ preventScroll: true });
     this.hud.setVisible(true);
@@ -540,7 +666,16 @@ class Game {
       this.hud.showArea(area.name, area.subtitle);
     }
     s.dayNight.apply();
-    window.setTimeout(() => this.say(`time:${s.dayNight.phaseName}`, PRIORITY.ambient, undefined, 0), 2500);
+    if (this.flags.has('opening')) {
+      this.flags.delete('opening');
+      this.say('arrival', PRIORITY.moment, undefined, 0);
+      window.setTimeout(() => this.say('goal:pintxos', PRIORITY.ambient, undefined, 90), 22000);
+      void this.autosave();
+    } else if (this.flags.has('needs-planning')) {
+      await this.morningPlanning();
+    } else {
+      window.setTimeout(() => this.say(`time:${s.dayNight.phaseName}`, PRIORITY.ambient, undefined, 0), 2500);
+    }
   }
 
   private async discover(loc: LocationDef): Promise<void> {
@@ -559,6 +694,7 @@ class Game {
     s.renderer.setTiltShift(0.35);
     const photo = s.renderer.snapshot();
     s.renderer.setTiltShift(1);
+    if (firstTime) void this.keepPhoto(photo, loc.name);
     this.state.set('card');
     await new Promise<void>((resolve) => {
       let done = false;
@@ -582,6 +718,7 @@ class Game {
       this.vibe.add('discovery');
       for (const n of this.needs.values()) n.enjoy(0.35);
       this.remember(`discovered:${loc.id}`, `Discovered ${loc.name}`, loc.name);
+      void this.autosave();
     }
     events.emit('location:discovered', { id: loc.id, firstTime });
     this.state.set('cinematic');
@@ -606,6 +743,7 @@ class Game {
       this.vibe.add('rest');
       if (!this.memories.has('sat:bench')) this.remember('sat:bench', 'Sat together on a bench by the bay');
       this.say('bench', PRIORITY.moment, undefined, 0);
+      void this.autosave();
     }
   }
 
@@ -628,6 +766,7 @@ class Game {
         toTitle: () => void this.backToTitle(),
         settings: this.settingsFor,
         history: () => this.bubbles.history,
+        callItANight: this.s.dayNight.hour >= 19.5 || this.s.dayNight.hour < 4 ? () => void this.callItANightFromMenu() : undefined,
       },
       this.reducedMotion,
     );
@@ -670,6 +809,386 @@ class Game {
     await menu?.close();
     this.audio.setDucked(false);
     this.showTitleScreen();
+  }
+
+  // --- Trip state ------------------------------------------------------------------
+
+  private resetTrip(): void {
+    const s = this.s;
+    this.memories = new Memories();
+    this.banter = this.makeDirector();
+    this.discovered.clear();
+    s.interactables.resetDiscovered();
+    this.hud.setCount(0, locations.length);
+    this.foodsTried = [];
+    this.wishDay = { day: 0, offered: [], pinned: [] };
+    this.wishesDone.clear();
+    this.goal = null;
+    this.goalDone = false;
+    this.flags.clear();
+    this.pages = [];
+    this.photos = [];
+    for (const url of this.photoUrls.values()) if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+    this.photoUrls.clear();
+    this.vibe = new Vibe();
+    for (const m of s.crew.members) this.needs.set(m.def.id, new Needs(m.def));
+    this.sunsetDay = 0;
+    this.lateAskedDay = 0;
+    this.currentArea = null;
+    s.dayNight.setTime(17.4, 1);
+    const p = spawnPoint();
+    s.crew.teleport(p.x, p.z, Math.PI);
+  }
+
+  private buildTrip(): TripData {
+    const s = this.s;
+    const needs: TripData['needs'] = {};
+    for (const [id, n] of this.needs) needs[id] = n.toJSON();
+    return {
+      version: 1,
+      savedAt: Date.now(),
+      day: s.dayNight.day,
+      hour: s.dayNight.hour,
+      leader: s.crew.leader.def.id,
+      crew: s.crew.members.map((m) => ({ id: m.def.id, x: m.mover.x, z: m.mover.z, heading: m.mover.heading })),
+      discovered: [...this.discovered],
+      foods: [...this.foodsTried],
+      memories: this.memories.toJSON(),
+      needs,
+      vibe: this.vibe.value,
+      banterPlayed: this.banter.playedIds,
+      wishes: { day: this.wishDay.day, offered: [...this.wishDay.offered], pinned: [...this.wishDay.pinned], done: [...this.wishesDone] },
+      goal: this.goal && !this.goalDone ? this.goal : null,
+      flags: [...this.flags],
+      pages: this.pages,
+      photos: this.photos,
+    };
+  }
+
+  private async applyTrip(d: TripData): Promise<void> {
+    const s = this.s;
+    s.dayNight.setTime(d.hour, d.day);
+    this.discovered = new Set(d.discovered.filter((id) => locations.some((l) => l.id === id)));
+    for (const id of this.discovered) s.interactables.markDiscovered(id);
+    this.hud.setCount(this.discovered.size, locations.length);
+    this.foodsTried = d.foods.filter((f) => foodById(f.id));
+    this.memories.load(d.memories);
+    for (const [id, n] of this.needs) n.load(d.needs[id]);
+    this.vibe.value = d.vibe;
+    this.banter.restorePlayed(d.banterPlayed);
+    this.wishDay = { day: d.wishes.day, offered: d.wishes.offered, pinned: d.wishes.pinned };
+    this.wishesDone = new Set(d.wishes.done);
+    this.goal = d.goal;
+    this.goalDone = false;
+    this.flags = new Set(d.flags);
+    this.pages = d.pages;
+    this.photos = d.photos;
+    this.sunsetDay = this.memories.all().some((m) => m.key === 'watched:sunset' && m.day === d.day) ? d.day : 0;
+    // Put the leader back in charge and everyone where they were.
+    while (s.crew.leader.def.id !== d.leader) s.crew.switchLeader();
+    const lead = d.crew.find((c) => c.id === d.leader);
+    if (lead && s.world.isFree(lead.x, lead.z, 0.34)) s.crew.teleport(lead.x, lead.z, lead.heading);
+    else {
+      const p = spawnPoint();
+      s.crew.teleport(p.x, p.z, Math.PI);
+    }
+    s.rig.snapTo(s.crew.leader.mover.x, groundY(s.crew.leader.mover.x, s.crew.leader.mover.z), s.crew.leader.mover.z);
+    for (const p of this.photos) {
+      const blob = await this.saves.getPhoto(p.id);
+      if (blob) this.photoUrls.set(p.id, URL.createObjectURL(blob));
+    }
+  }
+
+  private async autosave(): Promise<void> {
+    if (!this.tripStarted) return;
+    const result = await this.saves.save(this.buildTrip());
+    if (!result.ok && !this.warnedSave) {
+      this.warnedSave = true;
+      toast(this.s.ui, `${result.message} Saves are local to this browser.`, 'warn');
+    }
+  }
+
+  private async keepPhoto(dataUrl: string, title: string): Promise<void> {
+    if (!dataUrl) return;
+    const id = `photo-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+    this.photos.push({ id, day: this.s.dayNight.day, title });
+    this.photoUrls.set(id, dataUrl);
+    const blob = dataUrlToBlob(dataUrl);
+    if (blob) {
+      const r = await this.saves.putPhoto(id, blob);
+      if (!r.ok && !this.warnedSave) {
+        this.warnedSave = true;
+        toast(this.s.ui, r.message, 'warn');
+      }
+    }
+  }
+
+  // --- Goals and wishes -------------------------------------------------------------
+
+  private goalItems(): Array<{ text: string; done: boolean }> {
+    const items: Array<{ text: string; done: boolean }> = [];
+    if (this.goal) items.push({ text: this.goal, done: this.goalDone });
+    for (const id of this.wishDay.pinned) {
+      const w = wishes.find((x) => x.id === id);
+      const who = crewData.find((c) => c.id === w?.friend)?.name ?? '';
+      if (w) items.push({ text: `${who}: ${w.text}`, done: this.wishesDone.has(id) });
+    }
+    return items;
+  }
+
+  private wishSatisfied(id: string): boolean {
+    const w = wishes.find((x) => x.id === id);
+    if (!w) return false;
+    if ('food' in w.done) return this.foodsTried.some((f) => f.id === (w.done as { food: string }).food);
+    return this.memories.has(w.done.memory);
+  }
+
+  private checkWishes(): void {
+    for (const id of this.wishDay.offered) {
+      if (this.wishesDone.has(id) || !this.wishSatisfied(id)) continue;
+      this.wishesDone.add(id);
+      if (!this.wishDay.pinned.includes(id)) continue;
+      const w = wishes.find((x) => x.id === id)!;
+      this.vibe.add('wish');
+      this.audio.ui('cheer');
+      const m = this.s.crew.byId(w.friend);
+      m?.character.hop(0.5);
+      toast(this.s.ui, `Wish granted: ${crewData.find((c) => c.id === w.friend)?.name}’s “${w.text}”`);
+      window.setTimeout(() => this.say('wish:done', PRIORITY.moment, w.friend, 0), 400);
+    }
+    this.updateHud();
+  }
+
+  private offerWishes(day: number): Array<{ wish: (typeof wishes)[number]; friend: (typeof crewData)[number] }> {
+    return crewData.map((friend) => {
+      const mine = wishes.filter((w) => w.friend === friend.id);
+      const open = mine.filter((w) => !this.wishesDone.has(w.id) && !this.wishSatisfied(w.id));
+      const pool = open.length ? open : mine;
+      return { wish: pool[day % pool.length], friend };
+    });
+  }
+
+  private async morningPlanning(): Promise<void> {
+    const s = this.s;
+    this.state.set('scene');
+    const day = s.dayNight.day;
+    const offered = this.offerWishes(day);
+    const tips = [TIPS[day % TIPS.length], TIPS[(day + 2) % TIPS.length]];
+    const pinned = await showPlanning(s.ui, day, offered, tips, this.reducedMotion);
+    this.wishDay = { day, offered: offered.map((o) => o.wish.id), pinned };
+    this.flags.delete('needs-planning');
+    this.state.set('exploring');
+    this.checkWishes();
+    this.updateHud();
+    void this.autosave();
+    window.setTimeout(() => this.say('morning:plan', PRIORITY.ambient, undefined, 0), 1200);
+  }
+
+  // --- Food ---------------------------------------------------------------------------
+
+  private tasteFoods(ids: string[]): void {
+    const day = this.s.dayNight.day;
+    for (const id of ids) {
+      const food = foodById(id);
+      if (!food) continue;
+      if (!this.foodsTried.some((f) => f.id === id && f.day === day)) this.foodsTried.push({ id, day });
+      if (!this.memories.has(`tasted:${id}`)) this.remember(`tasted:${id}`, `Tried ${food.name.toLowerCase()}`);
+    }
+    for (const n of this.needs.values()) {
+      n.eat(0.55);
+      n.enjoy(0.2);
+    }
+    this.vibe.add('meal');
+    if (this.goal === DAY_ONE_GOAL && !this.goalDone) {
+      this.goalDone = true;
+      this.audio.ui('cheer');
+      toast(this.s.ui, 'Pintxos found. Day one, conquered.');
+    }
+    this.checkWishes();
+  }
+
+  private sceneContext(): SceneContext {
+    const s = this.s;
+    return {
+      scene: s.scene,
+      rig: s.rig,
+      crew: s.crew,
+      seats: s.bars.seats,
+      reducedMotion: () => this.reducedMotion,
+      fade: (to, seconds) => new Promise<void>((resolve) => void gsap.to(this.fade, { opacity: to, duration: seconds, onComplete: () => resolve() })),
+      line: (speaker, text) => {
+        const m = s.crew.byId(speaker);
+        const duration = BanterDirector.duration(text) * (s.settings.current.relaxedTiming ? 1.35 : 1);
+        if (m) this.bubbles.say(speaker, m.def.name, m.def.colors.top, text, duration, { day: s.dayNight.day, time: formatClock(s.dayNight.hour) });
+        return duration;
+      },
+      sfx: (k) => this.audio.ui(k),
+      wait: (seconds) =>
+        new Promise<void>((resolve) => {
+          const t = window.setTimeout(() => {
+            this.advance = null;
+            resolve();
+          }, seconds * 1000);
+          this.advance = () => {
+            window.clearTimeout(t);
+            this.advance = null;
+            resolve();
+          };
+        }),
+      onFrame: (fn) => {
+        this.frameHooks.add(fn);
+        return () => this.frameHooks.delete(fn);
+      },
+    };
+  }
+
+  private async visitBar(bar: BarDef): Promise<void> {
+    const s = this.s;
+    if (this.state.name !== 'exploring') return;
+    this.banter.interrupt();
+    this.bubbles.clear();
+    this.state.set('scene');
+    this.audio.setDucked(true);
+    const ctx = this.sceneContext();
+    const door = { x: bar.door.x + Math.sin(bar.facing) * 1.4, z: bar.door.z + Math.cos(bar.facing) * 1.4, heading: bar.facing };
+    let foods: FoodDef[] = [];
+    let wobbles = 0;
+
+    if (bar.activity === 'crawl') {
+      this.state.set('minigame');
+      const result = await playPintxosCrawl(s.ui, {
+        menu: bar.menu.map((id) => foodById(id)!).filter(Boolean),
+        favourites: Object.fromEntries(crewData.map((c) => [c.id, c.favouriteFoods])) as Record<CrewId, string[]>,
+        relaxed: s.settings.current.relaxedTiming,
+        oneButton: s.settings.current.oneButton,
+        reducedMotion: this.reducedMotion,
+        sfx: (k) => this.audio.ui(k),
+      });
+      this.state.set('scene');
+      foods = result.chosen.map((id) => foodById(id)!).filter(Boolean);
+      wobbles = result.wobbles;
+    } else if (bar.id === 'bar-ttipi') {
+      foods = ['tomato-salad', 'txuleta'].map((id) => foodById(id)!);
+    } else {
+      foods = bar.menu.map((id) => foodById(id)!).filter(Boolean);
+    }
+
+    const meal = await serveMeal(ctx, foods);
+    if (bar.id === 'bar-ttipi' && !this.memories.has('missed:tortilla')) {
+      // The famous tortilla is gone tonight: a funny miss, and a promise.
+      await ctx.wait(ctx.line('paulo', 'The tortilla list is full tonight. We were so close.') * 0.9);
+      await ctx.wait(ctx.line('huw', 'Then we come back tomorrow. Early. With purpose.') * 0.9);
+      this.remember('missed:tortilla', 'Just missed the famous tortilla at Bar Ttipi', bar.name);
+    }
+    if (bar.id === 'gazta') {
+      const slices = await choose(
+        s.ui,
+        'How many slices?',
+        'The cheesecakes are cooling on the counter. Huw is very quiet.',
+        [
+          { label: 'One to share', value: 1 },
+          { label: 'One each', value: 4 },
+          { label: 'One each, and two more for Huw', value: 6 },
+        ],
+        this.reducedMotion,
+      );
+      if (slices === 6) {
+        await ctx.wait(ctx.line('huw', 'Three cheesecakes. For me. I regret nothing.') * 0.9);
+        await ctx.wait(ctx.line('romy', 'We will never let you forget this.') * 0.9);
+        this.remember('ordered:three-cheesecakes', 'Huw ordered three cheesecakes', bar.name);
+      } else if (slices === 4) {
+        await ctx.wait(ctx.line('annette', 'One each. Correct. Civilised.') * 0.9);
+      } else {
+        await ctx.wait(ctx.line('romy', 'One to share. Brave.') * 0.9);
+      }
+    }
+    if (wobbles > 0 && !this.memories.has('wobbled:tray')) this.remember('wobbled:tray', 'The tray wobbled all the way back from the bar', bar.name);
+    // A table photo for the scrapbook.
+    s.renderer.setTiltShift(0.35);
+    void this.keepPhoto(s.renderer.snapshot(), `Dinner at ${bar.name}`);
+    s.renderer.setTiltShift(1);
+    this.tasteFoods(foods.map((f) => f.id));
+    await ctx.wait(2.5);
+    await meal.leave(door);
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+  }
+
+  // --- Ending the day -------------------------------------------------------------------
+
+  private async askLate(): Promise<void> {
+    if (this.state.name !== 'exploring') return;
+    this.state.set('scene');
+    const yes = await choose(
+      this.s.ui,
+      'It’s getting late',
+      'Head back to the hotel and fill in today’s scrapbook page?',
+      [
+        { label: 'Five more minutes', value: false },
+        { label: 'Call it a night', value: true },
+      ],
+      this.reducedMotion,
+    );
+    this.state.set('exploring');
+    if (yes) await this.callItANight();
+    else this.say('late', PRIORITY.ambient, undefined, 0);
+  }
+
+  private async callItANightFromMenu(): Promise<void> {
+    const menu = this.pause;
+    this.pause = null;
+    await menu?.close();
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    await this.callItANight();
+  }
+
+  private async callItANight(): Promise<void> {
+    const s = this.s;
+    if (this.state.name !== 'exploring') return;
+    this.state.set('scene');
+    this.banter.interrupt();
+    this.bubbles.clear();
+    if (s.crew.seated) s.crew.standUp();
+    const day = s.dayNight.day;
+    const todays = this.memories.onDay(day);
+    const photos = this.photos.filter((p) => p.day === day).map((p) => ({ id: p.id, title: p.title, url: this.photoUrls.get(p.id) ?? null }));
+    const foods = [...new Set(this.foodsTried.filter((f) => f.day === day).map((f) => foodById(f.id)?.name ?? f.id))];
+    const result = await showScrapbookPage(
+      s.ui,
+      { day, photos, foods, memories: todays, moment: null, caption: '' },
+      this.reducedMotion,
+    );
+    this.pages = this.pages.filter((p) => p.day !== day);
+    this.pages.push({
+      day,
+      moment: result.moment,
+      caption: result.caption,
+      photoIds: photos.map((p) => p.id),
+      foods,
+      memories: todays.map((m) => m.summary),
+    });
+    // A new morning.
+    await gsap.to(this.fade, { opacity: 1, duration: this.reducedMotion ? 0.05 : 0.5 });
+    s.dayNight.setTime(MORNING_HOUR, day + 1);
+    for (const n of this.needs.values()) {
+      n.rest(1);
+      n.values.hunger = 0.6;
+      n.values.fun = Math.max(n.values.fun, 0.7);
+    }
+    this.vibe.newDay();
+    if (this.goal === DAY_ONE_GOAL) this.goal = null;
+    const p = spawnPoint();
+    s.crew.teleport(p.x, p.z, Math.PI);
+    s.rig.snapTo(p.x, groundY(p.x, p.z), p.z);
+    s.rig.resetView();
+    this.flags.add('needs-planning');
+    this.state.set('exploring');
+    void this.autosave();
+    await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.8 });
+    await this.morningPlanning();
   }
 
   onVisibility = (visible: boolean): void => {
@@ -751,12 +1270,15 @@ async function boot(): Promise<void> {
   const interactables = new Interactables();
   scene.add(interactables.group);
 
+  const barDressing = createBars();
+  scene.add(barDressing.group);
+
   await progress(0.72, 'Waking the crew');
   const spawn = spawnPoint();
   const crew = new Crew(scene, world, spawn, Math.PI);
 
   const input = new Input(renderer.canvas);
-  game = new Game({ ui, scene, renderer, rig, input, world, scenery, interactables, crew, dayNight, settings });
+  game = new Game({ ui, scene, renderer, rig, input, world, scenery, interactables, crew, dayNight, settings, bars: barDressing });
 
   await progress(0.85, 'Warming up the shaders');
   dayNight.apply();
