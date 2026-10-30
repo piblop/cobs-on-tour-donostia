@@ -27,23 +27,25 @@ import {
 import { railingRuns } from './collisions.ts';
 import { mulberry32 } from '../engine/random.ts';
 import { RIVER, SUMMITS, ZURRIOLA } from './map.ts';
-import { applyCutaway } from './materials.ts';
+import { applyCutaway, waterTime } from './materials.ts';
+import { contactTexture, shoreFoamMaterial, surfaceMaterial } from './surfaces.ts';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const lin = (hex: string) => new THREE.Color(hex);
 
 export const PALETTE = {
-  seaShallow: '#8ff0e2',
-  seaDeep: '#3fb7c9',
+  seaShallow: '#6cd4c4',
+  seaDeep: '#196782',
   foam: '#ffffff',
-  sand: '#f7e7c4',
-  wetSand: '#e3cc9c',
-  seawall: '#d9ccb4',
-  promenade: '#f3e9d6',
-  boulevard: '#e6d8bd',
-  town: '#e3d2b4',
-  lane: '#d8c4a2',
-  plaza: '#ead9bb',
-  lawn: '#a7c48c',
+  sand: '#f5dfa8',
+  wetSand: '#b49c78',
+  seawall: '#b5afa3',
+  promenade: '#f3eee3',
+  boulevard: '#c5c5bc',
+  town: '#cfcbc0',
+  lane: '#aaaeb0',
+  plaza: '#d4cbb8',
+  lawn: '#9bbf87',
   hill: '#8db07a',
   hillDark: '#759a68',
   rock: '#b9ab98',
@@ -95,6 +97,7 @@ function bayRibbon(
 ): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
+  const uv: number[] = [];
   const idx: number[] = [];
   for (let i = 0; i <= stepsAlong; i++) {
     const x0 = fromX0 + ((toX0 - fromX0) * i) / stepsAlong;
@@ -102,6 +105,7 @@ function bayRibbon(
       const d = d1 + ((d2 - d1) * j) / stepsAcross;
       const p = bayPoint(x0, d);
       pos.push(p.x, y(p.x, p.z, d), p.z);
+      uv.push((x0 - fromX0) / 3, j / stepsAcross);
       const c = color(d);
       col.push(c.r, c.g, c.b);
     }
@@ -117,6 +121,7 @@ function bayRibbon(
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
@@ -184,7 +189,15 @@ export function createScenery(): Scenery {
     return m;
   };
 
-  const vcMat = track(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const surface = (kind: Parameters<typeof surfaceMaterial>[0], color: string, vertexColors = false) => {
+    const m = track(surfaceMaterial(kind, color, vertexColors));
+    track(m.map!);
+    return m;
+  };
+  const paving = surface('paving', '#ffffff', true);
+  const sandSurface = surface('sand', '#ffffff', true);
+  const cobbles = surface('cobbles', PALETTE.lane);
+  const lawnSurface = surface('grass', PALETTE.lawn);
   const lampGlass = track(new THREE.MeshLambertMaterial({ color: '#fff4d6', emissive: '#ffcf86', emissiveIntensity: 0.25 }));
   const lampPools = track(
     new THREE.MeshBasicMaterial({
@@ -196,6 +209,24 @@ export function createScenery(): Scenery {
       blending: THREE.AdditiveBlending,
     }),
   );
+  lampPools.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPoolWorld;').replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      vPoolWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+    `);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vPoolWorld;').replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+      // Clip the flat pool at the seawall instead of leaving a floating disc over sand.
+      if (vPoolWorld.x < 54.0) {
+        float x = vPoolWorld.x;
+        for (int i = 0; i < 3; i++) {
+          float dz = -6.0 - 0.0065 * x * x - vPoolWorld.z;
+          float slope = -0.013 * x;
+          x -= (x - vPoolWorld.x + dz * slope) / (1.0 + slope * slope - 0.013 * dz);
+        }
+        float d = dot(vPoolWorld.xz - vec2(x, -6.0 - 0.0065 * x * x), normalize(vec2(0.013 * x, 1.0)));
+        if (d < 9.08) discard;
+      }
+    `);
+  };
   const flatVc = track(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
   // --- Sky, fog and light ----------------------------------------------------
@@ -301,7 +332,7 @@ export function createScenery(): Scenery {
   sky.frustumCulled = false;
   group.add(sky);
 
-  const hemi = new THREE.HemisphereLight(0xe6f4ff, 0xefe8dc, 1.9);
+  const hemi = new THREE.HemisphereLight(0x91b7de, 0x68677e, 1.05);
   group.add(hemi);
   const sun = new THREE.DirectionalLight(0xffe7c8, 2.3);
   sun.castShadow = true;
@@ -339,28 +370,40 @@ export function createScenery(): Scenery {
     }
     seaGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   }
-  const seaUniforms = { uTime: { value: 0 } };
   const seaMat = track(
     new THREE.MeshPhongMaterial({
       vertexColors: true,
       flatShading: true,
       emissive: '#1d6e78',
-      emissiveIntensity: 0.32,
+      emissiveIntensity: 0.1,
       specular: '#ffe0b0',
       shininess: 70,
     }),
   );
   seaMat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = seaUniforms.uTime;
+    shader.uniforms.uTime = waterTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWater;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
         float w = sin(position.x * 0.21 + uTime * 0.9) * 0.10 + sin(position.z * 0.17 - uTime * 1.1) * 0.12
                 + sin((position.x + position.z) * 0.33 + uTime * 1.7) * 0.05;
-        transformed.y += w - 0.12;`,
+        float coast = (-6.0 - 0.0065 * position.x * position.x - position.z) / sqrt(1.0 + pow(0.013 * position.x, 2.0));
+        if (position.x > 44.0) coast = -9.8 - position.z;
+        if (position.x > 107.0) coast = -31.0 - position.z;
+        transformed.y += w * smoothstep(0.0, 10.0, coast) - 0.025;
+        vWater = position.xz;`,
       );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWater;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        float ripple = sin(vWater.x * 2.2 + sin(vWater.y * 0.7) + uTime * 0.4)
+                     * sin(vWater.y * 3.1 - uTime * 0.3);
+        float glint = smoothstep(0.98, 1.0, ripple) * 0.045;
+        diffuseColor.rgb *= 0.97 + ripple * 0.035;
+        totalEmissiveRadiance += vec3(0.35, 0.7, 0.72) * glint;
+      `);
   };
   const sea = new THREE.Mesh(track(seaGeo), seaMat);
   sea.receiveShadow = true;
@@ -368,9 +411,10 @@ export function createScenery(): Scenery {
   group.add(sea);
 
   // Foam along the waterline, gently breathing.
-  const foamMat = track(new THREE.MeshBasicMaterial({ color: PALETTE.foam, transparent: true, opacity: 0.5, depthWrite: false }));
+  const foamMat = track(shoreFoamMaterial());
+  track(foamMat.map!);
   const foam = staticMesh(
-    bayRibbon(BAY_WEST, BAY_EAST, -0.55, 0.1, () => 0.06, () => new THREE.Color(1, 1, 1), 120, 1),
+    bayRibbon(BAY_WEST, BAY_EAST, -0.6, 0.45, (_x, _z, d) => 0.075 + Math.max(0, d) * BEACH_SLOPE, () => new THREE.Color(1, 1, 1), 120, 2),
     foamMat,
   );
   foam.renderOrder = 1;
@@ -385,12 +429,12 @@ export function createScenery(): Scenery {
       -2.5,
       D.seawall - 0.4,
       // Plain beach slope; the stairs and sea wall are separate meshes.
-      (_x, _z, d) => (d < 0 ? BEACH_Y0 + d * 0.08 : BEACH_Y0 + BEACH_SLOPE * d),
-      (d) => wet.clone().lerp(sand, Math.min(1, Math.max(0, (d + 0.5) / 2.2))),
+      (_x, _z, d) => (d < 0 ? BEACH_Y0 + d * 0.18 : BEACH_Y0 + BEACH_SLOPE * d),
+      (d) => wet.clone().lerp(sand, THREE.MathUtils.smoothstep(d, 0.3, 3.0)),
       120,
       8,
     ),
-    vcMat,
+    sandSurface,
   );
   const wallCol = lin(PALETTE.seawall);
   for (const [a, b] of railingRuns()) {
@@ -411,11 +455,11 @@ export function createScenery(): Scenery {
   }
   staticMesh(
     bayRibbon(BAY_WEST, BAY_EAST, D.seawall, D.promenadeEnd, () => PROMENADE_Y, () => lin(PALETTE.promenade), 120, 1),
-    vcMat,
+    paving,
   );
   staticMesh(
     bayRibbon(BAY_WEST, BAY_EAST, D.promenadeEnd, D.rowFront + 0.5, () => PROMENADE_Y - 0.005, () => lin(PALETTE.boulevard), 120, 1),
-    vcMat,
+    paving,
   );
 
   // Stairs down to the sand.
@@ -463,7 +507,7 @@ export function createScenery(): Scenery {
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, PROMENADE_Y - 0.02, 0);
-    staticMesh(geo, track(new THREE.MeshLambertMaterial({ color: PALETTE.town })));
+    staticMesh(geo, surface('paving', PALETTE.town));
   }
   // Harbour quay edge stone.
   staticMesh(
@@ -476,11 +520,11 @@ export function createScenery(): Scenery {
     track(new THREE.MeshLambertMaterial({ color: PALETTE.seawall })),
   );
   // Old town paving, lanes and the square.
-  staticMesh(flatRect(53.5, EAST_LIMIT, -9.8, SOUTH_LIMIT, PROMENADE_Y), track(new THREE.MeshLambertMaterial({ color: PALETTE.lane })));
+  staticMesh(flatRect(53.5, EAST_LIMIT, -9.8, SOUTH_LIMIT, PROMENADE_Y), cobbles);
   {
     const [minX, maxX] = OLDTOWN_COLS[PLAZA_CELL.col];
     const [minZ, maxZ] = OLDTOWN_ROWS[PLAZA_CELL.row];
-    staticMesh(flatRect(minX - 1.5, maxX + 1.5, minZ - 1.5, maxZ + 1.5, PROMENADE_Y + 0.01), track(new THREE.MeshLambertMaterial({ color: PALETTE.plaza })));
+    staticMesh(flatRect(minX - 1.5, maxX + 1.5, minZ - 1.5, maxZ + 1.5, PROMENADE_Y + 0.01), surface('paving', PALETTE.plaza));
     // Paving rings for a sense of place.
     const ring = new THREE.RingGeometry(2.2, 2.5, 32);
     ring.rotateX(-Math.PI / 2);
@@ -488,8 +532,8 @@ export function createScenery(): Scenery {
     staticMesh(ring, track(new THREE.MeshLambertMaterial({ color: '#d4bf9b' })));
   }
   // Alderdi Eder lawn and path.
-  staticMesh(flatRect(ROW_EAST + 7, 53, -7, 9.5, PROMENADE_Y + 0.008), track(new THREE.MeshLambertMaterial({ color: PALETTE.lawn })));
-  staticMesh(flatRect(ROW_EAST + 7, 53.6, 2.2, 4.8, PROMENADE_Y + 0.014), track(new THREE.MeshLambertMaterial({ color: PALETTE.boulevard })));
+  staticMesh(flatRect(ROW_EAST + 7, 53, -7, 9.5, PROMENADE_Y + 0.008), lawnSurface);
+  staticMesh(flatRect(ROW_EAST + 7, 53.6, 2.2, 4.8, PROMENADE_Y + 0.014), surface('paving', PALETTE.boulevard));
 
   // --- Railing: the famous white balustrade ------------------------------------
   {
@@ -498,6 +542,7 @@ export function createScenery(): Scenery {
     const railMat = track(new THREE.MeshLambertMaterial({ color: PALETTE.railing }));
     const postMatrices: THREE.Matrix4[] = [];
     const curlMatrices: THREE.Matrix4[] = [];
+    const rails: THREE.BufferGeometry[] = [];
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -520,9 +565,11 @@ export function createScenery(): Scenery {
       for (const h of [0.98, 0.18]) {
         const curve = new THREE.CatmullRomCurve3(pts.map((p) => p.clone().setY(PROMENADE_Y + h)));
         const tube = new THREE.TubeGeometry(curve, Math.max(4, pts.length * 2), h > 0.5 ? 0.06 : 0.035, 5, false);
-        staticMesh(tube, railMat, { cast: true, receive: false });
+        rails.push(tube);
       }
     }
+    staticMesh(mergeGeometries(rails), railMat, { cast: true, receive: false });
+    rails.forEach((g) => g.dispose());
     const posts = track(new THREE.InstancedMesh(postGeo, railMat, postMatrices.length));
     postMatrices.forEach((mat, i) => posts.setMatrixAt(i, mat));
     posts.castShadow = true;
@@ -553,6 +600,21 @@ export function createScenery(): Scenery {
     return mesh;
   };
   const decor = mulberry32(77);
+  {
+    const contact = track(new THREE.MeshBasicMaterial({ map: track(contactTexture()), transparent: true, depthWrite: false }));
+    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    // Tree roots, bench feet and lamp bases stay grounded even outside the shadow map.
+    const marks = instanced(geo, contact, props, 0.022);
+    const dummy = new THREE.Object3D();
+    props.forEach((p, i) => {
+      dummy.position.set(p.x, PROMENADE_Y + 0.022, p.z);
+      dummy.rotation.y = p.rotation;
+      const tree = p.kind === 'tamarisk' || p.kind === 'gardenTree';
+      dummy.scale.set(tree ? 2.8 : p.kind === 'bench' ? 2.2 : 0.85, 1, tree ? 2.8 : 1.1).multiplyScalar(p.scale);
+      dummy.updateMatrix(); marks.setMatrixAt(i, dummy.matrix);
+    });
+    marks.castShadow = marks.receiveShadow = false;
+  }
   const trunkMat = track(new THREE.MeshLambertMaterial({ color: '#8a6a52' }));
   const leafMat = track(applyCutaway(new THREE.MeshLambertMaterial({ color: '#ffffff', flatShading: true })));
   for (const kind of ['tamarisk', 'gardenTree'] as const) {
@@ -561,17 +623,38 @@ export function createScenery(): Scenery {
     instanced(trunk, trunkMat, items, 1.1);
     const leaves = kind === 'tamarisk' ? new THREE.IcosahedronGeometry(1.6, 1) : new THREE.IcosahedronGeometry(1.5, 1);
     leaves.scale(1.15, kind === 'tamarisk' ? 0.7 : 0.95, 1.15);
-    const base = kind === 'tamarisk' ? lin('#9db58a') : lin('#86b06e');
+    const base = kind === 'tamarisk' ? lin('#80a36c') : lin('#669555');
     instanced(leaves, leafMat, items, kind === 'tamarisk' ? 2.9 : 3.0, () =>
       base.clone().offsetHSL((decor() - 0.5) * 0.03, 0, (decor() - 0.5) * 0.08),
     );
   }
   {
-    const lamps = byKind('lamp');
+    const lamps = [...byKind('lamp')];
+    for (const x of [62.3, 72.3, 82.3, 92.3]) for (const z of [1.7, 11.7]) {
+      lamps.push({ kind: 'lamp', x, z, rotation: Math.PI / 2, scale: 0.85 });
+    }
     const poleMat = track(new THREE.MeshLambertMaterial({ color: '#3f4a4f' }));
-    instanced(new THREE.CylinderGeometry(0.06, 0.09, 3.4, 6), poleMat, lamps, 1.7);
-    instanced(new THREE.SphereGeometry(0.26, 10, 8), lampGlass, lamps, 3.55);
-    instanced(new THREE.ConeGeometry(0.3, 0.25, 8), poleMat, lamps, 3.9);
+    const parts: THREE.BufferGeometry[] = [];
+    const part = (g: THREE.BufferGeometry, x: number, y: number) => { g.translate(x, y, 0); parts.push(g); };
+    part(new THREE.CylinderGeometry(0.065, 0.1, 3.4, 8), 0, 1.7);
+    part(new THREE.CylinderGeometry(0.18, 0.23, 0.32, 8), 0, 0.16);
+    part(new THREE.SphereGeometry(0.13, 8, 6), 0, 2.8);
+    for (const side of [-1, 1]) {
+      const curl = new THREE.TorusGeometry(0.29, 0.045, 5, 14, Math.PI * 1.5);
+      curl.rotateZ(side < 0 ? Math.PI : 0); part(curl, side * 0.28, 3.2);
+      part(new THREE.ConeGeometry(0.3, 0.22, 8), side * 0.57, 3.77);
+      part(new THREE.CylinderGeometry(0.28, 0.2, 0.1, 8), side * 0.57, 3.27);
+      for (const dx of [-0.18, 0.18]) {
+        const rod = new THREE.BoxGeometry(0.035, 0.4, 0.035); rod.translate(0, 0, 0.15);
+        part(rod, side * 0.57 + dx, 3.49);
+      }
+    }
+    const ironwork = mergeGeometries(parts); parts.forEach((p) => p.dispose());
+    instanced(ironwork, poleMat, lamps, 0);
+    const globes = [new THREE.SphereGeometry(0.23, 8, 6), new THREE.SphereGeometry(0.23, 8, 6)];
+    globes[0].translate(-0.57, 0, 0); globes[1].translate(0.57, 0, 0);
+    const lanterns = mergeGeometries(globes); globes.forEach((g) => g.dispose());
+    instanced(lanterns, lampGlass, lamps, 3.5);
     const pool = new THREE.CircleGeometry(2.6, 24);
     pool.rotateX(-Math.PI / 2);
     const pools = instanced(pool, lampPools, lamps, 0.03);
@@ -582,13 +665,15 @@ export function createScenery(): Scenery {
   {
     const benches = byKind('bench');
     const woodMat = track(new THREE.MeshLambertMaterial({ color: '#8fb3a6' }));
-    const seat = new THREE.BoxGeometry(1.7, 0.1, 0.5);
-    const back = new THREE.BoxGeometry(1.7, 0.45, 0.08);
-    back.translate(0, 0.28, -0.24);
-    const legs = new THREE.BoxGeometry(1.5, 0.42, 0.4);
-    legs.translate(0, -0.25, 0);
-    instanced(seat, woodMat, benches, 0.46);
-    instanced(back, woodMat, benches, 0.46);
+    const slats: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 4; i++) {
+      const seat = new THREE.BoxGeometry(1.75, 0.08, 0.105); seat.translate(0, 0, -0.18 + i * 0.12); slats.push(seat);
+      const back = new THREE.BoxGeometry(1.75, 0.1, 0.07); back.translate(0, 0.14 + i * 0.12, -0.27); slats.push(back);
+    }
+    const wood = mergeGeometries(slats); slats.forEach((g) => g.dispose());
+    const feet = [-0.62, 0.62].map((x) => { const g = new THREE.BoxGeometry(0.1, 0.52, 0.52); g.translate(x, -0.2, 0); return g; });
+    const legs = mergeGeometries(feet); feet.forEach((g) => g.dispose());
+    instanced(wood, woodMat, benches, 0.46);
     instanced(legs, track(new THREE.MeshLambertMaterial({ color: '#4a4f52' })), benches, 0.46);
   }
 
@@ -652,13 +737,19 @@ export function createScenery(): Scenery {
     const rng = mulberry32(5150);
     spots.forEach(([x, z], i) => {
       const boat = new THREE.Group();
-      const hull = new THREE.Mesh(track(new THREE.BoxGeometry(1.2, 0.5, 3)), track(new THREE.MeshLambertMaterial({ color: hullColors[i % hullColors.length] })));
+      const hullGeo = new THREE.CylinderGeometry(0.8, 0.55, 0.5, 6); hullGeo.scale(0.8, 1, 2.1);
+      const hull = new THREE.Mesh(track(hullGeo), track(new THREE.MeshLambertMaterial({ color: hullColors[i % hullColors.length], flatShading: true })));
       hull.position.y = 0.25;
-      const cabin = new THREE.Mesh(track(new THREE.BoxGeometry(0.9, 0.6, 1)), whiteMat);
-      cabin.position.set(0, 0.75, -0.3);
-      const mast = new THREE.Mesh(track(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 5)), whiteMat);
-      mast.position.set(0, 1.6, 0.4);
-      boat.add(hull, cabin, mast);
+      const cabin = new THREE.BoxGeometry(0.9, 0.6, 1); cabin.translate(0, 0.75, -0.3);
+      const mast = new THREE.CylinderGeometry(0.04, 0.04, 2.4, 5); mast.translate(0, 1.6, 0.4);
+      const sailGeo = new THREE.BufferGeometry();
+      sailGeo.setAttribute('position', new THREE.Float32BufferAttribute([0.06, 2.65, 0.4, 0.06, 0.9, 0.4, 0.06, 1.0, -1.0], 3));
+      sailGeo.computeVertexNormals();
+      const sail = new THREE.Mesh(track(sailGeo), track(new THREE.MeshLambertMaterial({ color: i % 2 ? '#fff1d7' : '#edc668', side: THREE.DoubleSide })));
+      const stripe = new THREE.BoxGeometry(1.08, 0.09, 2.5); stripe.translate(0, 0.48, 0);
+      const trim = new THREE.Mesh(track(mergeGeometries([cabin, mast, stripe])), whiteMat);
+      for (const g of [cabin, mast, stripe]) g.dispose();
+      boat.add(hull, trim, sail);
       hull.castShadow = true;
       boat.position.set(x, 0, z);
       boat.rotation.y = rng() * Math.PI * 2;
@@ -722,9 +813,8 @@ export function createScenery(): Scenery {
     lampGlass,
     lampPools,
     update(time: number) {
-      seaUniforms.uTime.value = time;
       skyUniforms.uTime.value = time;
-      foamMat.opacity = 0.32 + Math.sin(time * 0.8) * 0.12;
+      foamMat.opacity = 0.58 + Math.sin(waterTime.value * 0.8) * 0.08;
       for (const b of boats) {
         b.obj.position.y = b.baseY + Math.sin(time * 1.1 + b.phase) * 0.08;
         b.obj.rotation.z = Math.sin(time * 0.9 + b.phase) * 0.04;

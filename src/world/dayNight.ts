@@ -25,16 +25,16 @@ interface Key {
 }
 
 const KEYS: Key[] = [
-  { t: 0, sun: '#a9c2ff', sunI: 0.45, hemiSky: '#6f80b8', hemiGround: '#3d3a52', hemiI: 0.8, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
-  { t: 5.5, sun: '#a9c2ff', sunI: 0.45, hemiSky: '#6f80b8', hemiGround: '#3d3a52', hemiI: 0.8, zenith: '#13204a', mid: '#2c3a63', horizon: '#5d5a86', glow: '#7a76a8', cloudLit: '#454d78', cloudShade: '#2f3456', night: 1, exposure: 1.15 },
-  { t: 7, sun: '#ffb98a', sunI: 1.3, hemiSky: '#cfd8ff', hemiGround: '#e8d6c8', hemiI: 1.4, zenith: '#7fa6d6', mid: '#e8c3c9', horizon: '#ffc7a3', glow: '#ffb07a', cloudLit: '#ffe1d6', cloudShade: '#d8b3c2', night: 0, exposure: 1.05 },
-  { t: 10, sun: '#fff1dc', sunI: 2.5, hemiSky: '#e6f4ff', hemiGround: '#efe8dc', hemiI: 1.9, zenith: '#5fb0e0', mid: '#a8d8ec', horizon: '#e3f1f3', glow: '#fff1c9', cloudLit: '#ffffff', cloudShade: '#dfe6ee', night: 0, exposure: 1.0 },
-  { t: 16, sun: '#fff1dc', sunI: 2.5, hemiSky: '#e6f4ff', hemiGround: '#efe8dc', hemiI: 1.9, zenith: '#5fb0e0', mid: '#a8d8ec', horizon: '#e3f1f3', glow: '#fff1c9', cloudLit: '#ffffff', cloudShade: '#dfe6ee', night: 0, exposure: 1.0 },
-  { t: 18, sun: '#ffe7c8', sunI: 2.3, hemiSky: '#e6f4ff', hemiGround: '#efe8dc', hemiI: 1.9, zenith: '#6fb6d9', mid: '#a9d8e8', horizon: '#ffd9b3', glow: '#ffc98a', cloudLit: '#fff4e8', cloudShade: '#e9c3c0', night: 0, exposure: 1.02 },
-  { t: 20, sun: '#ffa774', sunI: 1.7, hemiSky: '#c9c6e8', hemiGround: '#e8cdbf', hemiI: 1.45, zenith: '#5a7fb8', mid: '#c9a3c4', horizon: '#ffb08a', glow: '#ff9a6a', cloudLit: '#ffc3a8', cloudShade: '#b98aa6', night: 0.1, exposure: 1.05 },
-  { t: 21, sun: '#b6a6ff', sunI: 0.6, hemiSky: '#8c96c8', hemiGround: '#6b5f73', hemiI: 1.0, zenith: '#2e3f72', mid: '#6a5d8f', horizon: '#c98f9a', glow: '#e0828a', cloudLit: '#7a6d96', cloudShade: '#4c4870', night: 0.6, exposure: 1.1 },
-  { t: 22.5, sun: '#a9c2ff', sunI: 0.45, hemiSky: '#6f80b8', hemiGround: '#3d3a52', hemiI: 0.8, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
-  { t: 24, sun: '#a9c2ff', sunI: 0.45, hemiSky: '#6f80b8', hemiGround: '#3d3a52', hemiI: 0.8, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
+  { t: 0, sun: '#a9c2ff', sunI: 0.55, hemiSky: '#7895c2', hemiGround: '#343c56', hemiI: 0.82, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
+  { t: 5.5, sun: '#a9c2ff', sunI: 0.55, hemiSky: '#7895c2', hemiGround: '#343c56', hemiI: 0.82, zenith: '#13204a', mid: '#2c3a63', horizon: '#5d5a86', glow: '#7a76a8', cloudLit: '#454d78', cloudShade: '#2f3456', night: 1, exposure: 1.15 },
+  { t: 7, sun: '#ffb98a', sunI: 1.7, hemiSky: '#a6bfe3', hemiGround: '#747487', hemiI: 1.05, zenith: '#7fa6d6', mid: '#e8c3c9', horizon: '#ffc7a3', glow: '#ffb07a', cloudLit: '#ffe1d6', cloudShade: '#d8b3c2', night: 0, exposure: 1.05 },
+  { t: 10, sun: '#fff1dc', sunI: 2.45, hemiSky: '#c5d9ef', hemiGround: '#aaa1b2', hemiI: 1.55, zenith: '#5fb0e0', mid: '#a8d8ec', horizon: '#e3f1f3', glow: '#fff1c9', cloudLit: '#ffffff', cloudShade: '#dfe6ee', night: 0, exposure: 1.0 },
+  { t: 16, sun: '#fff1dc', sunI: 2.45, hemiSky: '#c5d9ef', hemiGround: '#aaa1b2', hemiI: 1.55, zenith: '#5fb0e0', mid: '#a8d8ec', horizon: '#e3f1f3', glow: '#fff1c9', cloudLit: '#ffffff', cloudShade: '#dfe6ee', night: 0, exposure: 1.0 },
+  { t: 18, sun: '#ffe2b8', sunI: 2.5, hemiSky: '#bed1ed', hemiGround: '#a89aac', hemiI: 1.5, zenith: '#6fb6d9', mid: '#a9d8e8', horizon: '#ffd9b3', glow: '#ffc98a', cloudLit: '#fff4e8', cloudShade: '#e9c3c0', night: 0, exposure: 1.02 },
+  { t: 20, sun: '#ffa774', sunI: 1.9, hemiSky: '#b0b5df', hemiGround: '#8e7f93', hemiI: 1.2, zenith: '#5a7fb8', mid: '#c9a3c4', horizon: '#ffb08a', glow: '#ff9a6a', cloudLit: '#ffc3a8', cloudShade: '#b98aa6', night: 0.1, exposure: 1.05 },
+  { t: 21, sun: '#b0caff', sunI: 0.72, hemiSky: '#8297ca', hemiGround: '#44465f', hemiI: 0.95, zenith: '#2e3f72', mid: '#6a5d8f', horizon: '#c98f9a', glow: '#e0828a', cloudLit: '#7a6d96', cloudShade: '#4c4870', night: 0.6, exposure: 1.1 },
+  { t: 22.5, sun: '#a9c2ff', sunI: 0.55, hemiSky: '#7895c2', hemiGround: '#343c56', hemiI: 0.82, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
+  { t: 24, sun: '#a9c2ff', sunI: 0.55, hemiSky: '#7895c2', hemiGround: '#343c56', hemiI: 0.82, zenith: '#0f1a3a', mid: '#263559', horizon: '#4a4d78', glow: '#6c6fa3', cloudLit: '#3d4672', cloudShade: '#2a2f50', night: 1, exposure: 1.15 },
 ];
 
 const colourCache = new Map<string, THREE.Color>();
@@ -201,8 +201,9 @@ export class DayNight {
 
     // Lamps switch on through dusk; windows warm up a little after.
     const lamps = nightWindow(hour, 20.2, 21.0, 6.5, 7.2);
-    s.lampGlass.emissiveIntensity = 0.25 + lamps * 2.4;
-    s.lampPools.opacity = lamps * 0.5;
+    s.lampGlass.emissiveIntensity = 0.12 + lamps * 5.0;
+    s.lampPools.opacity = lamps * 0.65;
+    this.scene.userData.night = this.night;
     windowGlow.value = Math.min(1, this.night * 1.2);
   }
 

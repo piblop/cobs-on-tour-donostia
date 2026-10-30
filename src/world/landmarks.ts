@@ -21,7 +21,9 @@ import {
   travelStops,
 } from './map.ts';
 import { mulberry32 } from '../engine/random.ts';
-import { applyCutaway } from './materials.ts';
+import { applyCutaway, waterTime, windowGlow } from './materials.ts';
+import { shoreFoamMaterial, surfaceMaterial } from './surfaces.ts';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * The wider city added in M4: Peine del Viento, the hilltops, Miramar's
@@ -66,8 +68,11 @@ export function createLandmarks(): Landmarks {
   const white = M('#fbfaf6');
   const iron = M('#4a4f52');
   const rust = M('#8a4b2a', { flatShading: true });
-  const lawn = M('#9cc28a');
-  const sand = M('#f2e0b8');
+  const surface = (kind: Parameters<typeof surfaceMaterial>[0], color: string, vertexColors = false) => {
+    const m = surfaceMaterial(kind, color, vertexColors); mats.push(m); texs.push(m.map!); return m;
+  };
+  const lawn = surface('grass', '#9bbf87');
+  const sand = surface('sand', '#f5dfa8', true);
   const rng = mulberry32(9090);
 
   // --- Summit plateaus -------------------------------------------------------------
@@ -400,19 +405,27 @@ export function createLandmarks(): Landmarks {
   const grosGround = new THREE.PlaneGeometry(GROS.maxX - RIVER.east + 40, GROS.maxZ - ZURRIOLA.wallZ + 60);
   grosGround.rotateX(-Math.PI / 2);
   grosGround.translate((RIVER.east + GROS.maxX + 40) / 2, PROMENADE_Y - 0.02, (ZURRIOLA.wallZ + GROS.maxZ + 60) / 2);
-  mesh(grosGround, M('#e3d2b4'), 0, 0, 0, false).receiveShadow = true;
+  mesh(grosGround, surface('paving', '#d9d7cd'), 0, 0, 0, false).receiveShadow = true;
   // Zurriola beach, sloping down to the open sea.
   {
     const w = GROS.maxX - RIVER.east + 40;
     const g = new THREE.PlaneGeometry(w, ZURRIOLA.wallZ - ZURRIOLA.waterZ + 4, 4, 8);
     g.rotateX(-Math.PI / 2);
     const p = g.attributes.position as THREE.BufferAttribute;
+    const colors: number[] = [];
+    const dry = new THREE.Color('#ffffff'), wet = new THREE.Color('#958b76');
     for (let i = 0; i < p.count; i++) {
       const z = p.getZ(i) + (ZURRIOLA.wallZ + ZURRIOLA.waterZ - 4) / 2;
       p.setY(i, 0.05 + 0.034 * Math.max(-1, z - ZURRIOLA.waterZ) - (z < ZURRIOLA.waterZ ? 0.3 : 0));
+      const color = wet.clone().lerp(dry, THREE.MathUtils.smoothstep(z, ZURRIOLA.waterZ, ZURRIOLA.waterZ + 4));
+      colors.push(color.r, color.g, color.b);
     }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     g.computeVertexNormals();
     mesh(g, sand, RIVER.east + w / 2, 0, (ZURRIOLA.wallZ + ZURRIOLA.waterZ - 4) / 2, false).receiveShadow = true;
+    const foam = shoreFoamMaterial(); mats.push(foam); texs.push(foam.map!);
+    const lace = new THREE.PlaneGeometry(w, 1.2); lace.rotateX(-Math.PI / 2);
+    mesh(lace, foam, RIVER.east + w / 2, 0.08, ZURRIOLA.waterZ - 0.15, false).renderOrder = 1;
     // Sea wall and railing, open at the ramp.
     for (const [a, b] of [
       [RIVER.east, ZURRIOLA.ramp[0]],
@@ -425,10 +438,69 @@ export function createLandmarks(): Landmarks {
     ramp.rotation.x = -0.17;
   }
   // The Kursaal: two leaning glass cubes that glow at night.
-  const kursaalGlow = applyCutaway(M('#d6e6e9', { transparent: true, opacity: 0.9, emissive: '#ffe7b8', emissiveIntensity: 0 }), undefined, 'cutaway-glass');
+  const glassCanvas = document.createElement('canvas'); glassCanvas.width = glassCanvas.height = 128;
+  const gg = glassCanvas.getContext('2d')!;
+  const sheen = gg.createLinearGradient(0, 0, 128, 80);
+  sheen.addColorStop(0, '#c4e1dd'); sheen.addColorStop(0.4, '#f1eee0'); sheen.addColorStop(0.6, '#b6d3d9'); sheen.addColorStop(1, '#d6e5d9');
+  gg.fillStyle = sheen; gg.fillRect(0, 0, 128, 128);
+  for (let x = 0; x < 128; x += 8) {
+    gg.fillStyle = 'rgba(247,255,246,0.28)'; gg.fillRect(x, 0, 2, 128);
+    gg.fillStyle = 'rgba(29,86,102,0.1)'; gg.fillRect(x + 6, 0, 1, 128);
+  }
+  const glassMap = new THREE.CanvasTexture(glassCanvas); glassMap.colorSpace = THREE.SRGBColorSpace; texs.push(glassMap);
+  const kursaalGlow = applyCutaway(M('#ffffff', { map: glassMap, transparent: true, opacity: 0.86, emissive: '#ffe7b8', emissiveIntensity: 0 }), (shader) => {
+    shader.uniforms.uWindowGlow = windowGlow;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGlassWorld;\nvarying vec3 vGlassNormal;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlassWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGlassNormal = normalize(mat3(modelMatrix) * normal);');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uWindowGlow;\nvarying vec3 vGlassWorld;\nvarying vec3 vGlassNormal;').replace('#include <emissivemap_fragment>', `
+      #include <emissivemap_fragment>
+      float rim = pow(1.0 - abs(dot(normalize(cameraPosition - vGlassWorld), normalize(vGlassNormal))), 3.0);
+      totalEmissiveRadiance += vec3(0.4, 0.65, 0.7) * rim * 0.3;
+      totalEmissiveRadiance += vec3(1.5, 1.2, 0.65) * uWindowGlow * texture2D(map, vMapUv).rgb;
+    `);
+  }, 'cutaway-kursaal');
+  const ribs: THREE.BufferGeometry[] = [];
   for (const k of KURSAAL) {
     const cube = mesh(new THREE.BoxGeometry(k.w, k.h, k.d), kursaalGlow, k.x, PROMENADE_Y + k.h / 2, k.z);
     cube.rotation.z = 0.04;
+    cube.updateMatrix();
+    const rib = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+      const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); g.applyMatrix4(cube.matrix); ribs.push(g);
+    };
+    for (const side of [-1, 1]) {
+      for (let x = -k.w / 2; x <= k.w / 2 + 0.01; x += k.w / 12) rib(0.045, k.h, 0.065, x, 0, side * (k.d / 2 + 0.02));
+      for (let z = -k.d / 2; z <= k.d / 2 + 0.01; z += k.d / 12) rib(0.065, k.h, 0.045, side * (k.w / 2 + 0.02), 0, z);
+      for (const y of [-k.h / 2, 0, k.h / 2]) {
+        rib(k.w + 0.1, 0.075, 0.1, 0, y, side * k.d / 2);
+        rib(0.1, 0.075, k.d, side * k.w / 2, y, 0);
+      }
+    }
+  }
+  mesh(mergeGeometries(ribs), applyCutaway(M('#c3d6ce'), undefined, 'cutaway-kursaal-ribs'), 0, 0, 0, false);
+  ribs.forEach((g) => g.dispose());
+
+  // Festooned lane crossings, with a sagging wire and little Basque-colour pennants.
+  {
+    const pos: number[] = [], colors: number[] = [];
+    const wires: number[] = [];
+    const shades = ['#ba4947', '#f6e6c6', '#3a8272', '#e4af50'];
+    for (const x of [58, 68.5, 78.5, 88.5]) for (const z of [3.5, 13.5]) {
+      const wire = (t: number) => new THREE.Vector3(x, PROMENADE_Y + 6.2 - Math.sin(t * Math.PI) * 0.45, z - 1.9 + t * 3.8);
+      for (let i = 0; i < 16; i++) wires.push(...wire(i / 16).toArray(), ...wire((i + 1) / 16).toArray());
+      for (let i = 0; i < 7; i++) {
+        const a = wire((i + 0.15) / 7), b = wire((i + 0.85) / 7);
+        const tip = a.clone().lerp(b, 0.5); tip.y -= 0.52; tip.x += 0.1;
+        pos.push(...a.toArray(), ...b.toArray(), ...tip.toArray());
+        const color = new THREE.Color(shades[(i + Math.floor(x)) % shades.length]);
+        for (let j = 0; j < 3; j++) colors.push(color.r, color.g, color.b);
+      }
+    }
+    const flags = new THREE.BufferGeometry();
+    flags.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    flags.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); flags.computeVertexNormals();
+    mesh(flags, applyCutaway(M('#ffffff', { vertexColors: true, side: THREE.DoubleSide })), 0, 0, 0, false);
+    const wireGeo = G(new THREE.BufferGeometry()); wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
+    const wireMat = applyCutaway(new THREE.LineBasicMaterial({ color: '#515d59' })); mats.push(wireMat);
+    group.add(new THREE.LineSegments(wireGeo, wireMat));
   }
   // Surfers waiting for a wave off Zurriola.
   const surfers: THREE.Group[] = [];
@@ -489,6 +561,7 @@ export function createLandmarks(): Landmarks {
     ferry,
     kursaalGlow,
     update(time, reducedMotion) {
+      waterTime.value = reducedMotion ? 0 : time;
       if (!reducedMotion) {
         wheel.rotation.z = time * 0.25;
         for (const g of gondolas) g.rotation.z = -wheel.rotation.z;

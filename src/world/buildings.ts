@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { PROMENADE_Y, TOWN_HALL, buildingLayout, type BuildingDef } from './map.ts';
-import { applyCutaway, facadeTextures, plasterTint } from './materials.ts';
+import { applyCutaway, facadeTextures, plasterTint, windowGlow } from './materials.ts';
+import { mulberry32 } from '../engine/random.ts';
+import { contactTexture, surfaceTexture } from './surfaces.ts';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** Accumulates flat-shaded, non-indexed triangles with UVs and colours. */
 class MeshBuilder {
@@ -78,8 +81,8 @@ function addWalls(mb: MeshBuilder, b: BuildingDef, baseY: number): void {
   const hw = b.width / 2;
   const hd = b.depth / 2;
   const top = baseY + b.height;
-  const wall = new THREE.Color(b.color);
-  const foot = wall.clone().multiplyScalar(0.8);
+  const wall = new THREE.Color(b.color).offsetHSL(0, b.kind === 'oldtown' ? 0.12 : 0.045, -0.025);
+  const foot = wall.clone().multiplyScalar(0.76);
   // Corners in local space, counter-clockwise from above.
   const corners: Array<[number, number]> = [
     [-hw, hd],
@@ -174,6 +177,120 @@ export interface BuildingMeshes {
   dispose(): void;
 }
 
+/** Hundreds of architectural pieces share one draw per material, not per house. */
+function dressBuildings(defs: BuildingDef[], group: THREE.Group, resources: Array<{ dispose(): void }>): void {
+  const boxes: Array<{ matrix: THREE.Matrix4; color: THREE.Color }> = [];
+  const flowers: typeof boxes = [];
+  const canopies: typeof boxes = [];
+  const glass: typeof boxes = [];
+  const shadows: typeof boxes = [];
+  const rng = mulberry32(190813);
+  const dummy = new THREE.Object3D();
+  const shades = ['#a8433c', '#286c60', '#c68e3c', '#497b8b'];
+  const add = (list: typeof boxes, b: BuildingDef, x: number, y: number, z: number, w: number, h: number, d: number, color: string, tilt = 0) => {
+    toWorld(b, x, PROMENADE_Y + y, z, dummy.position);
+    dummy.rotation.set(tilt, b.rotation, 0, 'YXZ');
+    dummy.scale.set(w, h, d);
+    dummy.updateMatrix();
+    list.push({ matrix: dummy.matrix.clone(), color: new THREE.Color(color) });
+  };
+  for (const b of defs) {
+    const hw = b.width / 2, hd = b.depth / 2;
+    const accent = shades[Math.floor(rng() * shades.length)];
+    // A dark plinth, projecting floor bands and a double limestone cornice.
+    for (const y of [0.18, ...Array.from({ length: Math.floor(b.height / FLOOR_HEIGHT) }, (_, i) => (i + 1) * FLOOR_HEIGHT), b.height - 0.15, b.height + 0.06]) {
+      const top = y > b.height - 0.3;
+      const width = top ? 0.28 : 0.12;
+      const color = y < 1 ? '#9b8d7d' : '#f5e7ce';
+      for (const side of [-1, 1]) {
+        add(boxes, b, 0, y, side * hd, b.width + width * 2, top ? 0.18 : 0.1, width * 2, color);
+        add(boxes, b, side * hw, y, 0, width * 2, top ? 0.18 : 0.1, b.depth, color);
+      }
+    }
+    // Corner quoins and roof chimneys give the mass a finished silhouette.
+    for (const side of [-1, 1]) {
+      add(boxes, b, side * (hw - 0.09), b.height / 2, hd + 0.025, 0.18, b.height, 0.12, '#ecddc6');
+    }
+    const chimneyY = b.height + Math.min(2.7, Math.min(hw, hd) * 0.75);
+    add(canopies, b, hw * 0.45, chimneyY, -hd * 0.3, 0.5, 1.5, 0.6, '#bb8060');
+    add(canopies, b, hw * 0.45, chimneyY + 0.8, -hd * 0.3, 0.68, 0.16, 0.76, '#e6d1b3');
+    add(canopies, b, hw * 0.45, chimneyY + 0.9, -hd * 0.3, 0.36, 0.08, 0.42, '#403d3b');
+    add(shadows, b, 0, 0.028, 0, b.width + 2.6, 1, b.depth + 2.6, '#ffffff');
+    if (b.kind === 'landmark') continue;
+    for (const side of [-1, 1]) {
+      const bays = Math.max(1, Math.round(b.width / b.bay));
+      const spacing = b.width / bays;
+      const bw = Math.min(1.35, spacing * 0.7);
+      // Recessed shop glass, painted timber surrounds and striped fabric canopies.
+      for (let bay = 0; bay < bays; bay++) {
+        const x = -hw + spacing * (bay + 0.5);
+        add(boxes, b, x, 1.25, side * (hd + 0.045), bw + 0.18, 2.35, 0.12, accent);
+        add(glass, b, x, 1.22, side * (hd + 0.12), bw - 0.06, 2.05, 0.06, '#294f59');
+        add(boxes, b, x, 1.2, side * (hd + 0.18), 0.055, 2.1, 0.05, '#e6d6b9');
+        add(boxes, b, x, 2.55, side * (hd + 0.18), bw + 0.28, 0.26, 0.2, accent);
+        const stripes = 6;
+        for (let i = 0; i < stripes; i++) {
+          const xx = x - (bw + 0.4) / 2 + (i + 0.5) * (bw + 0.4) / stripes;
+          const color = i % 2 ? '#fff0d6' : accent;
+          add(canopies, b, xx, 2.75, side * (hd + 0.56), (bw + 0.4) / stripes, 0.07, 1.0, color, side * 0.18);
+          add(canopies, b, xx, 2.57, side * (hd + 1.03), (bw + 0.4) / stripes, 0.22, 0.06, color);
+        }
+        for (let floor = 1; floor < b.height / FLOOR_HEIGHT - 0.7; floor++) {
+          const y = floor * FLOOR_HEIGHT + 0.76;
+          // Balcony slabs align with the bottom of each painted window bay.
+          add(boxes, b, x, y, side * (hd + 0.25), bw + 0.28, 0.12, 0.65, '#e9dcc3');
+          add(boxes, b, x, y + 0.66, side * (hd + 0.57), bw + 0.28, 0.055, 0.055, '#344749');
+          for (let i = 0; i <= 3; i++) add(boxes, b, x - (bw + 0.2) / 2 + (bw + 0.2) * i / 3, y + 0.36, side * (hd + 0.57), 0.035, 0.6, 0.035, '#344749');
+          for (const edge of [-1, 1]) add(boxes, b, x + edge * (bw + 0.24) / 2, y + 0.66, side * (hd + 0.3), 0.045, 0.045, 0.56, '#344749');
+          if (rng() < 0.52) {
+            add(boxes, b, x, y + 0.35, side * (hd + 0.64), bw * 0.7, 0.22, 0.24, '#a6543e');
+            add(flowers, b, x, y + 0.49, side * (hd + 0.67), bw * 0.8, 0.23, 0.32, '#426e48');
+            for (let i = 0; i < 3; i++) add(flowers, b, x + (i - 1) * bw * 0.22, y + 0.61, side * (hd + 0.69), 0.16, 0.17, 0.16, i % 2 ? '#f4cf65' : '#d94d67');
+          }
+        }
+      }
+    }
+  }
+  const solid = applyCutaway(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true }));
+  const shop = applyCutaway(new THREE.MeshLambertMaterial({ color: '#ffffff', vertexColors: true }), (shader) => {
+    shader.uniforms.uWindowGlow = windowGlow;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uWindowGlow;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(3.2, 1.5, 0.4) * uWindowGlow;');
+  }, 'cutaway-shop');
+  const contact = new THREE.MeshBasicMaterial({ map: contactTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+  const plane = new THREE.PlaneGeometry(1, 1); plane.rotateX(-Math.PI / 2);
+  for (const [items, geo, mat, cast] of [
+    [boxes, new THREE.BoxGeometry(1, 1, 1), solid, false],
+    [canopies, new THREE.BoxGeometry(1, 1, 1), solid, true],
+    [flowers, new THREE.IcosahedronGeometry(0.5, 0), solid, false],
+    [glass, new THREE.BoxGeometry(1, 1, 1), shop, false],
+    [shadows, plane, contact, false],
+  ] as const) {
+    const chunks = new Map<string, typeof boxes>();
+    for (const item of items) {
+      const key = `${Math.floor(item.matrix.elements[12] / 24)},${Math.floor(item.matrix.elements[14] / 24)}`;
+      let chunk = chunks.get(key); if (!chunk) chunks.set(key, (chunk = []));
+      chunk.push(item);
+    }
+    for (const chunk of chunks.values()) {
+      const parts = chunk.map((item) => {
+        const part = geo.clone().applyMatrix4(item.matrix);
+        const colors = new Float32Array(part.attributes.position.count * 3);
+        for (let i = 0; i < colors.length; i += 3) { colors[i] = item.color.r; colors[i + 1] = item.color.g; colors[i + 2] = item.color.b; }
+        part.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        return part;
+      });
+      const merged = mergeGeometries(parts); parts.forEach((p) => p.dispose());
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = cast; mesh.receiveShadow = mat === solid;
+      mesh.name = mat === contact ? 'building-contact-shadows' : 'facade-details';
+      mesh.matrixAutoUpdate = false;
+      group.add(mesh); resources.push(merged);
+    }
+    resources.push(geo);
+  }
+  resources.push(solid, shop, contact, contact.map!);
+}
+
 export function createBuildings(): BuildingMeshes {
   const defs = [...buildingLayout(), ...landmarkExtras()];
   const rowWalls = new MeshBuilder();
@@ -189,18 +306,26 @@ export function createBuildings(): BuildingMeshes {
   const oldTex = facadeTextures('oldtown');
   const rowMat = applyCutaway(new THREE.MeshLambertMaterial({ vertexColors: true, map: rowTex.map }), plasterTint(rowTex.mask), 'facade');
   const oldMat = applyCutaway(new THREE.MeshLambertMaterial({ vertexColors: true, map: oldTex.map }), plasterTint(oldTex.mask), 'facade');
-  const roofMat = applyCutaway(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const tiles = surfaceTexture('tiles');
+  const roofMat = applyCutaway(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, map: tiles }));
   const edgeMat = applyCutaway(new THREE.LineBasicMaterial({ color: 0x6e4f3c, transparent: true, opacity: 0.38 }));
 
   const group = new THREE.Group();
   group.name = 'buildings';
   const geometries: THREE.BufferGeometry[] = [];
+  const details: Array<{ dispose(): void }> = [];
+  dressBuildings(defs, group, details);
   for (const [mb, mat] of [
     [rowWalls, rowMat],
     [oldWalls, oldMat],
     [roofs, roofMat],
   ] as const) {
     const geo = mb.build();
+    if (mb === roofs) {
+      const pos = geo.attributes.position;
+      const uv = geo.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / 1.8, pos.getZ(i) / 1.8);
+    }
     geometries.push(geo);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
@@ -219,6 +344,8 @@ export function createBuildings(): BuildingMeshes {
     occluders: defs,
     dispose() {
       for (const g of geometries) g.dispose();
+      for (const d of details) d.dispose();
+      tiles.dispose();
       for (const m of [rowMat, oldMat, roofMat, edgeMat]) m.dispose();
       for (const t of [rowTex, oldTex]) {
         t.map.dispose();

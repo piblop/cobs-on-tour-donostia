@@ -18,6 +18,9 @@ const PostcardShader = {
     blur: { value: 2.2 },
     warmth: { value: 0.025 },
     vignette: { value: 0.22 },
+    night: { value: 0 },
+    bloom: { value: 0.18 },
+    bloomTaps: { value: 4 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -34,7 +37,15 @@ const PostcardShader = {
     uniform float blur;
     uniform float warmth;
     uniform float vignette;
+    uniform float night;
+    uniform float bloom;
+    uniform int bloomTaps;
     varying vec2 vUv;
+    vec3 bright(vec2 offset) {
+      vec3 c = texture2D(tDiffuse, vUv + offset / resolution).rgb;
+      // HDR threshold: only the bright amber emissives bloom, not moonlit walls.
+      return c * smoothstep(1.8, 3.2, max(c.r, max(c.g, c.b)));
+    }
     void main() {
       float dist = max(0.0, abs(vUv.y - focus) - band);
       float amount = smoothstep(0.0, 0.45, dist) * blur;
@@ -49,6 +60,22 @@ const PostcardShader = {
       c += texture2D(tDiffuse, vUv + vec2( 2.2, -2.2) * px) * 0.0351351351;
       c += texture2D(tDiffuse, vUv + vec2(-2.2, -2.2) * px) * 0.0351351351;
       vec3 col = c.rgb;
+      if (night > 0.01) {
+        vec3 halo = vec3(0.0);
+        for (int i = 0; i < 8; i++) {
+          if (i >= bloomTaps) break;
+          float angle = float(i) * 6.283185 / float(bloomTaps);
+          vec2 dir = vec2(cos(angle), sin(angle));
+          vec3 glow = bright(dir * 6.0);
+          if (bloomTaps > 4) glow = glow * 0.6 + bright(dir * 12.0) * 0.4;
+          halo += glow / float(bloomTaps);
+        }
+        col += halo * bloom * night;
+      }
+      // A gentle inkier toe and a little chroma retain the painted pastel palette.
+      float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(luma), col, 1.04);
+      col = max(vec3(0.0), (col - 0.018) * 1.035);
       col *= vec3(1.0 + warmth, 1.0 + warmth * 0.35, 1.0 - warmth * 0.5);
       vec2 v = vUv - 0.5;
       col *= 1.0 - vignette * dot(v, v) * 1.6;
@@ -144,10 +171,14 @@ export class Renderer {
       this.composer.dispose();
     }
     this.composer = null;
+    this.renderPass = null;
+    this.postcard = null;
     if (this.settings.quality === 'low') return;
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.postcard = new ShaderPass(PostcardShader);
+    this.postcard.uniforms.bloom.value = this.settings.quality === 'high' ? 0.26 : 0.18;
+    this.postcard.uniforms.bloomTaps.value = this.settings.quality === 'high' ? 8 : 4;
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.postcard);
     this.composer.addPass(new OutputPass());
@@ -184,6 +215,7 @@ export class Renderer {
 
   render(): void {
     if (this.contextLost) return;
+    if (this.postcard) this.postcard.uniforms.night.value = Number(this.scene.userData.night) || 0;
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mulberry32 } from '../engine/random.ts';
 
 /**
  * Shared uniforms for the "peek-through" cutaway. Building fragments that sit
@@ -7,6 +8,8 @@ import * as THREE from 'three';
  */
 /** 0 by day, 1 when windows glow amber at night. Shared by every facade. */
 export const windowGlow = { value: 0 };
+/** Shared decorative water clock, frozen by the world's reduced-motion setting. */
+export const waterTime = { value: 0 };
 
 export const cutaway = {
   uFocus: { value: new THREE.Vector3() },
@@ -78,7 +81,8 @@ export function applyCutaway<T extends THREE.Material>(
  */
 export function facadeTextures(kind: 'row' | 'oldtown'): { map: THREE.CanvasTexture; mask: THREE.CanvasTexture } {
   const size = 128;
-  const speckles = Array.from({ length: 220 }, () => [Math.random() * size, Math.random() * size, Math.random() * 0.05]);
+  const rng = mulberry32(kind === 'row' ? 813 : 1813);
+  const speckles = Array.from({ length: 220 }, () => [rng() * size, rng() * size, rng() * 0.05]);
   const paint = (mask: boolean): THREE.CanvasTexture => {
     const c = document.createElement('canvas');
     c.width = size;
@@ -101,18 +105,23 @@ export function facadeTextures(kind: 'row' | 'oldtown'): { map: THREE.CanvasText
     const wx = (size - ww) / 2;
     const wy = 26;
     // Shutters: sage in the old town, pale grey-blue on the boulevard.
-    g.fillStyle = detail(kind === 'oldtown' ? '#7fa889' : '#cfdde3');
+    g.fillStyle = detail(kind === 'oldtown' ? '#376d61' : '#688c93');
     g.fillRect(wx - 14, wy, 12, wh);
     g.fillRect(wx + ww + 2, wy, 12, wh);
+    g.fillStyle = detail(kind === 'oldtown' ? '#254f48' : '#50717b');
+    for (let y = wy + 5; y < wy + wh; y += 7) {
+      g.fillRect(wx - 13, y, 10, 2);
+      g.fillRect(wx + ww + 3, y, 10, 2);
+    }
     // Glass catching the sky: light at the top, deeper below.
     if (mask) {
       // Green marks glass, so windows can glow warm at night.
       g.fillStyle = '#00ff00';
     } else {
       const grad = g.createLinearGradient(0, wy, 0, wy + wh);
-      grad.addColorStop(0, '#a9cfe0');
-      grad.addColorStop(0.45, '#7aa3bd');
-      grad.addColorStop(1, '#5b7f99');
+      grad.addColorStop(0, '#80b8c6');
+      grad.addColorStop(0.45, '#3e7185');
+      grad.addColorStop(1, '#234b64');
       g.fillStyle = grad;
     }
     g.fillRect(wx, wy, ww, wh);
@@ -152,7 +161,7 @@ export function plasterTint(mask: THREE.Texture): (shader: THREE.WebGLProgramPar
           // Roughly two windows in three are lit, chosen per window cell.
           vec2 cellId = floor(vMapUv);
           float lit = step(0.33, fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453));
-          totalEmissiveRadiance += vec3(1.0, 0.68, 0.32) * facadeMask.g * (1.0 - facadeMask.r) * lit * uWindowGlow * 1.6;
+          totalEmissiveRadiance += vec3(1.0, 0.53, 0.17) * facadeMask.g * (1.0 - facadeMask.r) * lit * uWindowGlow * 4.2;
         #endif`,
       )
       .replace(

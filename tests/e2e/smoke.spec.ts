@@ -133,7 +133,12 @@ test('the crew can sit together on a bench and stand up again', async ({ page })
   await walkUntil(page, 'KeyA', 'Sit together');
   await expect(page.locator('.prompt')).toContainText('Sit together');
   await page.keyboard.press('KeyE');
-  await expect(page.locator('.prompt')).toContainText('Stand up', { timeout: 5_000 });
+  // A seated friendship scene may be offered first; let it play, then stand.
+  await expect(page.locator('.prompt')).toContainText(/Stand up|♥/, { timeout: 5_000 });
+  if ((await page.locator('.prompt').textContent())?.includes('♥')) {
+    await page.keyboard.press('KeyE');
+    await expect(page.locator('.prompt')).toContainText('Stand up', { timeout: 30_000 });
+  }
   await page.keyboard.press('KeyE');
   await expect
     .poll(() =>
