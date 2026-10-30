@@ -19,7 +19,7 @@ describe('FixedStepper', () => {
     let steps = 0;
     const stepper = new FixedStepper(() => steps++);
     stepper.advance(3); // a three second hitch
-    expect(steps).toBeLessThanOrEqual(5);
+    expect(steps).toBeLessThanOrEqual(8);
     expect(stepper.dropped).toBeGreaterThan(2.5);
   });
 

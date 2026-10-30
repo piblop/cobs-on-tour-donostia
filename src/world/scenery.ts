@@ -26,6 +26,7 @@ import {
 } from './map.ts';
 import { railingRuns } from './collisions.ts';
 import { mulberry32 } from '../engine/random.ts';
+import { RIVER, SUMMITS, ZURRIOLA } from './map.ts';
 import { applyCutaway } from './materials.ts';
 
 const lin = (hex: string) => new THREE.Color(hex);
@@ -145,7 +146,7 @@ function radialGlowTexture(): THREE.CanvasTexture {
 }
 
 /** Low-poly hill: a squashed icosphere with seeded bumps. */
-function hillGeometry(radius: number, height: number, seed: number): THREE.BufferGeometry {
+function hillGeometry(radius: number, height: number, seed: number, cap = Infinity): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(1, 3);
   const rng = mulberry32(seed);
   const p = g.attributes.position as THREE.BufferAttribute;
@@ -158,7 +159,8 @@ function hillGeometry(radius: number, height: number, seed: number): THREE.Buffe
     let b = bumps.get(key);
     if (b === undefined) bumps.set(key, (b = 0.88 + rng() * 0.22));
     const yy = y < 0 ? y * 0.15 : y;
-    p.setXYZ(i, x * radius * b, yy * height * b, z * radius * b);
+    // Walkable hilltops are flattened into a plateau.
+    p.setXYZ(i, x * radius * b, Math.min(yy * height * b, cap), z * radius * b);
   }
   g.computeVertexNormals();
   return g;
@@ -329,6 +331,7 @@ export function createScenery(): Scenery {
       let dist = 80;
       if (x > BAY_WEST - 10 && x < BAY_EAST + 20) dist = Math.max(0, -projectToShore(x, z).d);
       if (x > BAY_EAST) dist = Math.min(dist, Math.max(0, -9.8 - z));
+      if (x > RIVER.east) dist = Math.max(0, ZURRIOLA.waterZ - z);
       c.copy(shallow).lerp(deep, Math.min(1, dist / 45));
       colors[i * 3] = c.r;
       colors[i * 3 + 1] = c.g;
@@ -449,7 +452,7 @@ export function createScenery(): Scenery {
     const pts: Array<{ x: number; z: number }> = [];
     for (let i = 0; i <= 60; i++) pts.push(bayPoint(BAY_WEST + ((BAY_EAST - BAY_WEST) * i) / 60, D.rowFront + 0.3));
     pts.push(...quayLine().slice(1));
-    pts.push({ x: EAST_LIMIT + 30, z: -9.8 }, { x: EAST_LIMIT + 30, z: 90 }, { x: BAY_WEST - 30, z: 90 }, {
+    pts.push({ x: RIVER.west, z: -9.8 }, { x: RIVER.west, z: 90 }, { x: BAY_WEST - 30, z: 90 }, {
       x: BAY_WEST - 30,
       z: pts[0].z,
     });
@@ -595,12 +598,12 @@ export function createScenery(): Scenery {
   const stoneMat = track(new THREE.MeshLambertMaterial({ color: '#cdbfa8', flatShading: true }));
   const whiteMat = track(new THREE.MeshLambertMaterial({ color: '#f7f4ec', flatShading: true }));
   const { urgull, igueldo, santaClara } = LANDMARKS;
-  for (const [h, seed] of [
-    [urgull, 11],
-    [igueldo, 23],
-    [santaClara, 37],
+  for (const [h, seed, top] of [
+    [urgull, 11, SUMMITS.urgull.y],
+    [igueldo, 23, SUMMITS.igueldo.y],
+    [santaClara, 37, SUMMITS.santaClara.y],
   ] as const) {
-    const m = staticMesh(hillGeometry(h.radius, h.height, seed), hillMat, { cast: true, receive: true });
+    const m = staticMesh(hillGeometry(h.radius, h.height, seed, top + 0.4), hillMat, { cast: true, receive: true });
     m.position.set(h.x, -0.5, h.z);
     m.updateMatrix();
     // A rocky skirt where the hill meets the sea.
@@ -610,7 +613,7 @@ export function createScenery(): Scenery {
   }
   // Urgull: castle walls and the statue on top.
   {
-    const top = urgull.height - 0.8;
+    const top = SUMMITS.urgull.y - 0.2;
     const keep = staticMesh(new THREE.BoxGeometry(6, 2.6, 5), stoneMat, { cast: true, receive: true });
     keep.position.set(urgull.x + 1, top + 1, urgull.z - 1);
     keep.updateMatrix();
@@ -624,19 +627,13 @@ export function createScenery(): Scenery {
     arms.position.set(urgull.x + 1, top + 9.0, urgull.z - 1);
     arms.updateMatrix();
   }
-  // Igueldo: the hilltop tower.
-  {
-    const tower = staticMesh(new THREE.CylinderGeometry(1.6, 1.9, 6, 10), stoneMat, { cast: true, receive: true });
-    tower.position.set(igueldo.x + 6, igueldo.height + 1.5, igueldo.z + 6);
-    tower.updateMatrix();
-  }
   // Santa Clara lighthouse.
   {
     const lh = staticMesh(new THREE.CylinderGeometry(0.7, 0.9, 3.2, 10), whiteMat, { cast: true, receive: true });
-    lh.position.set(santaClara.x + 1, santaClara.height + 1.1, santaClara.z);
+    lh.position.set(santaClara.x + 1, SUMMITS.santaClara.y + 1.6, santaClara.z);
     lh.updateMatrix();
     const cap = staticMesh(new THREE.ConeGeometry(0.9, 0.9, 10), track(new THREE.MeshLambertMaterial({ color: '#c4643f' })), { cast: true, receive: true });
-    cap.position.set(santaClara.x + 1, santaClara.height + 3.1, santaClara.z);
+    cap.position.set(santaClara.x + 1, SUMMITS.santaClara.y + 3.6, santaClara.z);
     cap.updateMatrix();
   }
 
@@ -649,8 +646,8 @@ export function createScenery(): Scenery {
       [-4, -40],
       [18, -36],
       [6, -26],
-      [52, -15],
-      [57, -16.5],
+      [44, -18],
+      [58, -17.5],
     ];
     const rng = mulberry32(5150);
     spots.forEach(([x, z], i) => {

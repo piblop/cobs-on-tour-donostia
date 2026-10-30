@@ -9,6 +9,18 @@ async function hold(page: Page, key: string, ms: number) {
   await page.keyboard.up(key);
 }
 
+/** Walk in a direction until the interaction prompt shows the expected text. */
+async function walkUntil(page: Page, key: string, text: string, maxMs = 4000) {
+  await page.keyboard.down(key);
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const t = await page.locator('.prompt').evaluate((el) => (getComputedStyle(el).opacity !== '0' ? el.textContent ?? '' : ''));
+    if (t.includes(text)) break;
+    await page.waitForTimeout(60);
+  }
+  await page.keyboard.up(key);
+}
+
 /** Start (or restart) a trip and get through the opening. Optionally hop to the promenade spawn. */
 async function startTrip(page: Page, toPromenade = true) {
   await page.goto('./');
@@ -85,8 +97,8 @@ test('discovering La Concha shows a polaroid and counts it once', async ({ page 
   await startTrip(page);
   // From the promenade spawn the railing spot is a short stroll west and toward the sea
   // (the default camera looks inland, so that is D and S on screen).
-  await hold(page, 'KeyD', 500);
-  await hold(page, 'KeyS', 600);
+  await hold(page, 'KeyD', 450);
+  await walkUntil(page, 'KeyS', 'Lean on the railing');
   await expect(page.locator('.prompt')).toContainText('Lean on the railing');
 
   await page.keyboard.press('KeyE');
@@ -94,14 +106,14 @@ test('discovering La Concha shows a polaroid and counts it once', async ({ page 
   await expect(page.getByRole('dialog', { name: 'La Concha' })).toBeVisible();
   await page.getByRole('button', { name: 'Add to the journal' }).click();
   await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
-  await expect(page.locator('.collection-chip')).toContainText('1 / 2');
+  await expect(page.locator('.collection-chip')).toContainText('1 / 12');
 
   // A repeat visit is quicker and does not count twice.
   await page.keyboard.press('KeyE');
   await expect.poll(() => state(page), { timeout: 10_000 }).toBe('card');
   await page.getByRole('button', { name: 'Keep exploring' }).click();
   await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
-  await expect(page.locator('.collection-chip')).toContainText('1 / 2');
+  await expect(page.locator('.collection-chip')).toContainText('1 / 12');
 });
 
 test('Tab hands control to the next friend', async ({ page }) => {
@@ -118,7 +130,7 @@ test('Tab hands control to the next friend', async ({ page }) => {
 test('the crew can sit together on a bench and stand up again', async ({ page }) => {
   await startTrip(page);
   // The nearest bench is a few steps east of the promenade spawn (A on screen).
-  await hold(page, 'KeyA', 1000);
+  await walkUntil(page, 'KeyA', 'Sit together');
   await expect(page.locator('.prompt')).toContainText('Sit together');
   await page.keyboard.press('KeyE');
   await expect(page.locator('.prompt')).toContainText('Stand up', { timeout: 5_000 });
@@ -163,4 +175,15 @@ test('the trip saves and can be continued after a reload', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Start a new trip?' })).toBeVisible();
   await page.getByRole('button', { name: 'Keep my trip' }).click();
   await expect(page.getByRole('button', { name: /Continue trip/ })).toBeVisible();
+});
+
+test('the journal opens with J and shows sights and the Pintxo-dex', async ({ page }) => {
+  await startTrip(page, false);
+  await page.keyboard.press('KeyJ');
+  await expect(page.getByRole('dialog', { name: 'Trip journal' })).toBeVisible();
+  await expect(page.locator('.journal-count')).toContainText('of 12 sights');
+  await page.getByRole('tab', { name: 'Pintxo-dex' }).click();
+  await expect(page.locator('.journal-count')).toContainText('tasted');
+  await page.getByRole('button', { name: 'Close journal' }).click();
+  await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
 });

@@ -102,3 +102,28 @@ Mini-game timing lives in `minigameTuning` in `src/data/tuning.ts`. For the Pint
 ## Feel and camera tuning
 
 `src/data/tuning.ts` holds movement speed, acceleration, turn rate, camera distances, pitch and glide durations.
+
+## Add a small encounter
+
+Edit `src/data/encounters.ts` (`encounters`). An encounter plays by itself when the leader walks within `radius` of `position`, once per trip:
+
+```ts
+{
+  id: 'dog', kind: 'dog', position: { x: 40, z: -4 }, radius: 7,
+  hours: [8, 21],            // optional time window
+  weather: 'after-rain',     // optional: 'after-rain' or 'dry'
+  subject: 'huw',            // optional: the friend it is about
+  beats: [['huw', 'DOG.'], ['romy', 'We have lost Huw.']],
+  memory: { key: 'met:dog', summary: 'Huw made a best friend: a scruffy dog' },
+}
+```
+
+`kind` picks any extra behaviour (the dog trots over, the musician plays, a gull swoops). A unit test checks every encounter sits somewhere walkable. Add a callback line in `banter.ts` with `cb(..., 'met:dog', ...)` to remember it later.
+
+## Add a friendship scene
+
+Edit `friendships` in the same file. A scene is offered (a ♥ prompt above the leader) when its `when` conditions hold: `areas`, `hours`, `raining`, `seated` or `afterMeal`. It plays once, saves a photo to the scrapbook and records its `memory`. Friendship is never a score.
+
+## Add a travel link
+
+Travel stops live in `travelStops()` in `src/world/map.ts`, and the links in `src/world/travel.ts`. Each link has a `from` prompt point, an arrival `to` a few steps from the return stop, the game `hours` it takes and a `mode` (`funicular`, `boat` or `climb`). Connections are fictional abstractions, not timetables.

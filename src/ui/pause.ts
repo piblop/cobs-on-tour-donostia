@@ -16,6 +16,8 @@ export interface PauseHandlers {
   history(): HistoryItem[];
   /** Offered in the evening: end the day and fill in the scrapbook. */
   callItANight?: () => void;
+  /** Open the trip journal (sights and Pintxo-dex). */
+  journal?: () => void;
 }
 
 /** Pause menu. "Return to the promenade" is always available as a safe recovery. */
@@ -41,6 +43,7 @@ export function showPause(root: HTMLElement, handlers: PauseHandlers, reducedMot
         resume,
         handlers.callItANight ? button('Call it a night', handlers.callItANight) : null,
         button('Return to the promenade', handlers.returnToPromenade),
+        handlers.journal ? button('Journal (J)', handlers.journal) : null,
         button('Conversation history', showHistory),
         button('Settings', showSettings),
         button('Controls', showControls),

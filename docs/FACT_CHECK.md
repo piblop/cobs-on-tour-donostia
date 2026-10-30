@@ -7,10 +7,20 @@ Nothing in the game is verified until a human checks the claim and sets `needsRe
 
 **Verify current star counts before sharing.** (Applies to the tasting-menu restaurants once they are added.)
 
-Pending review: 14 of 14 claims.
+Pending review: 31 of 31 claims.
 
 | Table | ID | Shown as | Claim | Source |
 | --- | --- | --- | --- | --- |
+| locations | `peine-del-viento` | Peine del Viento | The Peine del Viento ("Comb of the Wind") is a set of three steel sculptures by Eduardo Chillida, fixed into the rocks at the western end of the bay. | unsourced |
+| locations | `igueldo-view` | Monte Igueldo | Monte Igueldo is reached by an old funicular railway and has a small, old-fashioned amusement park at the top. | unsourced |
+| locations | `urgull-castle` | Monte Urgull | Monte Urgull is crowned by the old Castillo de la Mota and a large statue of the Sacred Heart (Sagrado Corazón). | unsourced |
+| locations | `santa-clara` | Isla de Santa Clara | Isla de Santa Clara sits in the middle of the bay; small boats cross to it in the warmer months, and it has a little lighthouse. | unsourced |
+| locations | `miramar-gardens` | Miramar gardens | Miramar Palace was built in the late 19th century as a royal summer residence, in an English cottage style. | unsourced |
+| locations | `plaza-balconies` | Plaza de la Constitución | The balconies around the Plaza de la Constitución are numbered, a reminder of the days when the square was used for bullfights. | unsourced |
+| locations | `basilica` | Basílica de Santa María | The Basílica de Santa María del Coro is a baroque church at the foot of Monte Urgull, at the end of Calle Mayor. | unsourced |
+| locations | `bretxa` | Mercado de la Bretxa | La Bretxa market takes its name from the breach made in the old city walls during a 19th-century siege. | unsourced |
+| locations | `zurriola` | Zurriola beach | Zurriola beach, in the Gros neighbourhood, faces the open sea and is the city’s favourite surfing beach. | unsourced |
+| locations | `kursaal` | Kursaal | The Kursaal congress centre, a pair of glassy cubes designed by Rafael Moneo, stands where the Urumea river meets the sea. | unsourced |
 | locations | `la-concha-railing` | La Concha | La Concha's white promenade railing is one of the city's best-known symbols, and its curling pattern turns up on souvenirs all over town. | unsourced |
 | locations | `parte-vieja-lanes` | Parte Vieja | The Parte Vieja is the oldest part of Donostia, tucked between the bay and Monte Urgull, and is famous for its pintxos bars. | unsourced |
 | foods | `gilda` | Gilda | The Gilda is said to be named after a 1940s film heroine: green, salty and a little bit spicy. | unsourced |
@@ -25,3 +35,10 @@ Pending review: 14 of 14 claims.
 | foods | `txuleta` | Txuleta to share | Txuleta is a thick bone-in steak grilled over coals, usually served rare and shared. | unsourced |
 | foods | `tortilla` | The famous tortilla | Basque bar tortillas are often served thick and slightly runny in the middle. | unsourced |
 | foods | `burnt-cheesecake` | Burnt Basque cheesecake | Burnt Basque cheesecake is baked at a high heat so the top caramelises dark while the middle stays creamy. | unsourced |
+| foods | `piparras` | Piparras | Piparras are long, mild pickled green peppers, a Basque favourite with pintxos and in a Gilda. | unsourced |
+| foods | `idiazabal-quince` | Idiazabal with quince and walnuts | Idiazabal is a sheep’s milk cheese from the Basque Country, often lightly smoked and served with quince paste and walnuts. | unsourced |
+| foods | `chorizo-cider` | Chorizo cooked in cider | A Basque cider-house feast traditionally opens with chorizo cooked in cider. | unsourced |
+| foods | `cod-omelette` | Salt-cod omelette | Salt-cod omelette is one of the classic courses of the Basque cider-house menu. | unsourced |
+| foods | `fried-cod-peppers` | Fried cod with green peppers | Fried salt cod with green peppers often follows the omelette at a cider-house feast. | unsourced |
+| foods | `sagardoa` | Cider from the barrel | In Basque cider houses, cider is caught in the glass straight from the barrel when someone calls “Txotx!”. | unsourced |
+| foods | `apple-juice` | Fresh apple juice | Cider houses usually have fresh apple juice for anyone not drinking cider. | unsourced |

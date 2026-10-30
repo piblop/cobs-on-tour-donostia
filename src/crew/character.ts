@@ -29,6 +29,7 @@ export class Character {
   seated = false;
   /** Happy wave/cheer pose for celebrations and photos. */
   cheering = 0;
+  private umbrella = new THREE.Group();
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
 
@@ -116,6 +117,17 @@ export class Character {
     this.buildAccessory(member.accessory, accent, dark, add);
 
     this.body.add(this.head);
+    // A folded-away umbrella that pops open in the rain.
+    const canopy = add(this.umbrella, new THREE.ConeGeometry(0.75, 0.38, 10, 1, true), accent, false);
+    (canopy.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+    canopy.position.y = 0.2;
+    canopy.castShadow = true;
+    const stick = add(this.umbrella, new THREE.CylinderGeometry(0.02, 0.02, 1.1, 5), dark, false);
+    stick.position.y = -0.35;
+    this.umbrella.position.set(0.3, 2.15, 0.05);
+    this.umbrella.rotation.z = -0.15;
+    this.umbrella.visible = false;
+    this.body.add(this.umbrella);
     this.root.add(this.body);
     this.root.scale.setScalar(1.45 * member.heightScale);
     // Blob shadow keeps the friend grounded even on low shadow settings.
@@ -200,6 +212,11 @@ export class Character {
       tail.position.set(0, 0.08, -0.42);
       tail.rotation.x = 0.55;
     }
+  }
+
+  setUmbrella(open: boolean): void {
+    this.umbrella.visible = open;
+    if (open) this.armR.rotation.x = -1.2;
   }
 
   /** Celebratory hop with squash and stretch. */

@@ -102,6 +102,9 @@ export class DayNight {
   private skyDir = new THREE.Vector3();
   private tmp = new THREE.Color();
   night = 0;
+  /** 0 clear .. 1 fully overcast (set from the weather). */
+  overcast = 0;
+  private grey = new THREE.Color('#a7b0b6');
   /** Fired once each time the time-of-day bracket changes. */
   onPhase: ((phase: TimeOfDay) => void) | null = null;
   private phase: TimeOfDay;
@@ -174,6 +177,15 @@ export class DayNight {
     s.sky.uNight.value = this.night;
     this.renderer.toneMappingExposure = THREE.MathUtils.lerp(a.exposure, b.exposure, f);
 
+    if (this.overcast > 0.001) {
+      const o = this.overcast;
+      s.sun.intensity *= 1 - 0.65 * o;
+      s.hemi.intensity *= 1 - 0.2 * o;
+      for (const c of [s.sky.zenith.value, s.sky.mid.value, s.sky.horizon.value, s.sky.glow.value]) c.lerp(this.grey, 0.6 * o);
+      s.sky.cloudLit.value.lerp(this.grey, 0.5 * o);
+      if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.lerp(this.grey, 0.6 * o);
+      if (this.scene.background instanceof THREE.Color) this.scene.background.lerp(this.grey, 0.6 * o);
+    }
     // The visible sun sits lower than the light, so golden hour reads as a sunset.
     sunDirection(hour, this.sunDir);
     const toMoon = nightWindow(hour, 20.6, 21.6, 5.5, 6.8);

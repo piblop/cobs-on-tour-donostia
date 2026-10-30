@@ -17,6 +17,15 @@ import {
   buildingLayout,
   propLayout,
   quayLine,
+  BRIDGE,
+  GROS,
+  KURSAAL,
+  MIRAMAR,
+  RIVER,
+  SUMMITS,
+  ZURRIOLA,
+  LANDMARKS,
+  peineLayout,
   type BuildingDef,
 } from './map.ts';
 
@@ -232,19 +241,65 @@ export function buildCollisionWorld(buildings: BuildingDef[] = buildingLayout())
   world.addPolyline(curveLine(BAY_WEST, BAY_EAST, D.water));
   // Railing along the top of the sea wall, open at the stairs.
   for (const [a, b] of railingRuns()) world.addPolyline(curveLine(a, b, D.seawall, 1));
-  // Building fronts along the bay boulevard.
-  world.addPolyline(curveLine(BAY_WEST, ROW_EAST, D.rowFront - 0.45, 1.2));
-  // West end of the beach and boulevard.
-  world.addPolyline([bayPoint(BAY_WEST, 0), bayPoint(BAY_WEST, D.rowFront)]);
+  // Building fronts along the bay boulevard, open for Miramar's gardens.
+  const front = D.rowFront - 0.45;
+  world.addPolyline(curveLine(BAY_WEST, MIRAMAR.from, front, 1.2));
+  world.addPolyline(curveLine(MIRAMAR.to, ROW_EAST, front, 1.2));
+  world.addPolyline([
+    bayPoint(MIRAMAR.from, front),
+    ...curveLine(MIRAMAR.from, MIRAMAR.to, MIRAMAR.depth, 1.5),
+    bayPoint(MIRAMAR.to, front),
+  ]);
+  // West end of the beach and boulevard, open onto the Peine del Viento walkway.
+  const peine = peineLayout();
+  world.addPolyline([bayPoint(BAY_WEST, 0), peine.A]);
+  world.addPolyline([peine.B, bayPoint(BAY_WEST, D.rowFront)]);
+  world.addPolyline(peine.polyline);
+  world.addBox(peine.station.x, peine.station.z, 4.4, 3.6, Math.atan2(peine.tangent.x, peine.tangent.z));
   // East end of the sand, where the beach meets the harbour wall.
   world.addPolyline([bayPoint(BAY_EAST, 0), bayPoint(BAY_EAST, D.seawall)]);
   // Harbour quay, then the far east edge and the inland edge.
   world.addPolyline(quayLine());
-  world.addSegment(EAST_LIMIT, -10, EAST_LIMIT, SOUTH_LIMIT + 1);
+  // The old town's river edge, open where the bridge crosses.
+  world.addSegment(EAST_LIMIT, -10, EAST_LIMIT, BRIDGE.minZ);
+  world.addSegment(EAST_LIMIT, BRIDGE.maxZ, EAST_LIMIT, SOUTH_LIMIT + 1);
   // Side wall of the last boulevard building, then the southern limit.
   const rowEnd = bayPoint(ROW_EAST, D.rowFront - 0.45);
   world.addSegment(rowEnd.x, rowEnd.z, rowEnd.x, SOUTH_LIMIT);
   world.addSegment(rowEnd.x, SOUTH_LIMIT, EAST_LIMIT, SOUTH_LIMIT);
+
+  // The bridge over the Urumea, and Gros on the far bank.
+  world.addSegment(EAST_LIMIT, BRIDGE.minZ, RIVER.east, BRIDGE.minZ);
+  world.addSegment(EAST_LIMIT, BRIDGE.maxZ, RIVER.east, BRIDGE.maxZ);
+  world.addSegment(RIVER.east, ZURRIOLA.waterZ, RIVER.east, BRIDGE.minZ);
+  world.addSegment(RIVER.east, BRIDGE.maxZ, RIVER.east, GROS.maxZ);
+  world.addSegment(RIVER.east, GROS.maxZ, GROS.maxX, GROS.maxZ);
+  world.addSegment(GROS.maxX, GROS.maxZ, GROS.maxX, ZURRIOLA.waterZ);
+  // Zurriola: the sea, then the sea wall with a ramp down to the sand.
+  world.addSegment(GROS.maxX, ZURRIOLA.waterZ + 0.35, RIVER.east, ZURRIOLA.waterZ + 0.35);
+  world.addSegment(RIVER.east, ZURRIOLA.wallZ, ZURRIOLA.ramp[0], ZURRIOLA.wallZ);
+  world.addSegment(ZURRIOLA.ramp[1], ZURRIOLA.wallZ, GROS.maxX, ZURRIOLA.wallZ);
+  // Ramp side walls so nobody steps off the edge.
+  world.addSegment(ZURRIOLA.ramp[0], ZURRIOLA.wallZ, ZURRIOLA.ramp[0], ZURRIOLA.wallZ - 4);
+  world.addSegment(ZURRIOLA.ramp[1], ZURRIOLA.wallZ, ZURRIOLA.ramp[1], ZURRIOLA.wallZ - 4);
+  for (const k of KURSAAL) world.addBox(k.x, k.z, k.w, k.d, 0);
+
+  // Hilltops reached by funicular, path and boat: a rim all the way round.
+  for (const [name, top] of Object.entries(SUMMITS)) {
+    const ring: Array<{ x: number; z: number }> = [];
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      ring.push({ x: top.x + Math.cos(a) * top.r, z: top.z + Math.sin(a) * top.r });
+    }
+    world.addPolyline(ring, true);
+    if (name === 'urgull') world.addBox(LANDMARKS.urgull.x + 1, LANDMARKS.urgull.z - 1, 6, 5, 0);
+    if (name === 'santaClara') world.addCircle(LANDMARKS.santaClara.x + 1, LANDMARKS.santaClara.z, 1.0);
+  }
+  // Igueldo's little amusement park: the wheel, the old tower and the carousel.
+  const ig = SUMMITS.igueldo;
+  world.addCircle(ig.x - 3, ig.z - 4, 2.2);
+  world.addCircle(ig.x - 4, ig.z + 5, 2.0);
+  world.addCircle(ig.x + 3, ig.z + 5.5, 2.3);
 
   for (const b of buildings) {
     if (b.kind === 'row') continue; // covered by the smooth front line above

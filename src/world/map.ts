@@ -81,6 +81,18 @@ export function projectToShore(px: number, pz: number): { x0: number; d: number 
 
 /** Ground height under a point: the sand slopes up to the promenade level. */
 export function groundY(x: number, z: number): number {
+  for (const s of Object.values(SUMMITS)) {
+    if ((x - s.x) ** 2 + (z - s.z) ** 2 < (s.r + 1.5) ** 2) return s.y;
+  }
+  if (x >= RIVER.east - 0.5) {
+    if (z >= ZURRIOLA.wallZ) return PROMENADE_Y;
+    const beach = BEACH_Y0 + BEACH_SLOPE * Math.max(0, z - ZURRIOLA.waterZ);
+    if (x >= ZURRIOLA.ramp[0] && x <= ZURRIOLA.ramp[1] && z > ZURRIOLA.wallZ - 4) {
+      const t = (z - (ZURRIOLA.wallZ - 4)) / 4;
+      return beach + (PROMENADE_Y - beach) * t;
+    }
+    return beach;
+  }
   if (x > BAY_EAST + 8 || x < BAY_WEST - 4) return PROMENADE_Y;
   const { x0, d } = projectToShore(x, z);
   if (x0 < BAY_WEST - 1 || x0 > BAY_EAST + 1 || d >= D.seawall) return PROMENADE_Y;
@@ -111,7 +123,7 @@ export interface BuildingDef {
   roof: RoofStyle;
   /** Window bay spacing along the facade. */
   bay: number;
-  kind: 'row' | 'oldtown' | 'landmark';
+  kind: 'row' | 'oldtown' | 'landmark' | 'gros';
 }
 
 const WALL_PALETTE = ['#f4e3c8', '#f7d6bd', '#f1c9a5', '#efe6d3', '#f6dcc9', '#e9d3b4', '#f3ceb6', '#fbefdc'];
@@ -127,8 +139,12 @@ function bayRow(rng: () => number): BuildingDef[] {
   const out: BuildingDef[] = [];
   let x0 = BAY_WEST;
   while (x0 < ROW_EAST - 4) {
+    if (x0 >= MIRAMAR.from - 0.01 && x0 < MIRAMAR.to) {
+      x0 = MIRAMAR.to;
+      continue;
+    }
     const width = 7 + rng() * 3;
-    const along = Math.min(width, ROW_EAST - x0);
+    const along = Math.min(width, ROW_EAST - x0, x0 < MIRAMAR.from ? MIRAMAR.from - x0 : Infinity);
     const mid = x0 + along / 2;
     const n = shoreNormal(mid);
     const centre = bayPoint(mid, D.rowFront + D.rowDepth / 2);
@@ -183,9 +199,15 @@ export function oldTownBlocks(): Block[] {
   return blocks;
 }
 
+/** Blocks given over to landmarks: the basilica and the market hall. */
+export const BASILICA_BLOCK: Block = { minX: 65, maxX: 72, minZ: -5, maxZ: 2 };
+export const BRETXA_BLOCK: Block = { minX: 85, maxX: 92, minZ: 15, maxZ: 22 };
+const sameBlock = (a: Block, b: Block) => a.minX === b.minX && a.minZ === b.minZ;
+
 function oldTownHouses(rng: () => number): BuildingDef[] {
   const out: BuildingDef[] = [];
   for (const b of oldTownBlocks()) {
+    if (sameBlock(b, BASILICA_BLOCK) || sameBlock(b, BRETXA_BLOCK)) continue;
     const w = b.maxX - b.minX;
     const h = b.maxZ - b.minZ;
     // Split along the longer side into narrow houses.
@@ -238,7 +260,7 @@ let cachedBuildings: BuildingDef[] | null = null;
 export function buildingLayout(): BuildingDef[] {
   if (!cachedBuildings) {
     const rng = mulberry32(1813);
-    cachedBuildings = [...bayRow(rng), ...oldTownHouses(rng), TOWN_HALL];
+    cachedBuildings = [...bayRow(rng), ...oldTownHouses(rng), TOWN_HALL, ...landmarkBuildings(), ...grosHouses(mulberry32(4242))];
   }
   return cachedBuildings;
 }
@@ -323,6 +345,161 @@ export function spawnPoint(): { x: number; z: number } {
 /** Decorative hills and island (outside the walkable area). */
 export const LANDMARKS = {
   urgull: { x: 80, z: -34, radius: 22, height: 19 },
-  igueldo: { x: -94, z: -44, radius: 30, height: 30 },
+  igueldo: { x: -118, z: -18, radius: 30, height: 30 },
   santaClara: { x: -16, z: -62, radius: 9, height: 7 },
 } as const;
+
+// --- M4: the wider city ---------------------------------------------------------------
+
+type P = { x: number; z: number };
+
+/** Walkable hilltops, reached by funicular, path and boat. y is the plateau height. */
+export const SUMMITS = {
+  igueldo: { x: -118, z: -18, r: 11, y: 26 },
+  urgull: { x: 80, z: -34, r: 9.5, y: 16 },
+  santaClara: { x: -16, z: -62, r: 4, y: 6 },
+} as const;
+
+/** Miramar Palace gardens interrupt the boulevard row (curve x range). */
+export const MIRAMAR = { from: -46, to: -32, depth: 34 } as const;
+
+/** The Urumea river between the old town and Gros, and the bridge over it. */
+export const RIVER = { west: 97, east: 107 } as const;
+export const BRIDGE = { minZ: 2, maxZ: 7.5 } as const;
+export const GROS = { minX: 107, maxX: 150, minZ: -12, maxZ: 25.5 } as const;
+export const ZURRIOLA = { waterZ: -31, wallZ: -12, ramp: [120, 124] as const } as const;
+export const KURSAAL = [
+  { x: 111.5, z: -6.2, w: 6, d: 6, h: 8 },
+  { x: 119, z: -5.6, w: 7, d: 7, h: 10.5 },
+] as const;
+export const GROS_COLS: ReadonlyArray<[number, number]> = [
+  [113, 120],
+  [124, 131],
+  [135, 142],
+];
+export const GROS_ROWS: ReadonlyArray<[number, number]> = [
+  [3, 10],
+  [14, 21],
+];
+
+/** The walkway from the end of the promenade out to the Peine del Viento. */
+export function peineLayout() {
+  const n = shoreNormal(BAY_WEST);
+  const t = { x: n.z, z: -n.x };
+  const back = { x: -t.x, z: -t.z };
+  const A = bayPoint(BAY_WEST, 9.3);
+  const B = bayPoint(BAY_WEST, 16);
+  const len = 8;
+  const A2 = { x: A.x + back.x * len, z: A.z + back.z * len };
+  const B2 = { x: B.x + back.x * len, z: B.z + back.z * len };
+  const mid = { x: (A2.x + B2.x) / 2, z: (A2.z + B2.z) / 2 };
+  const r = 5.6;
+  const C = { x: mid.x + back.x * 5.2, z: mid.z + back.z * 5.2 };
+  // Arc around the far side of the platform, from the land side to the sea side.
+  const aB = Math.atan2(B2.z - C.z, B2.x - C.x);
+  const aA = Math.atan2(A2.z - C.z, A2.x - C.x);
+  const aFar = Math.atan2(back.z, back.x);
+  const norm = (a: number) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  // Pick the sweep direction that passes through the far point.
+  const ccw = norm(aFar - aB) < norm(aA - aB);
+  const sweep = ccw ? norm(aA - aB) : -norm(aB - aA);
+  const arc: P[] = [];
+  const steps = 14;
+  for (let i = 0; i <= steps; i++) {
+    const a = aB + (sweep * i) / steps;
+    arc.push({ x: C.x + Math.cos(a) * r, z: C.z + Math.sin(a) * r });
+  }
+  const polyline: P[] = [B, B2, ...arc, A2, A];
+  const side = { x: -back.z, z: back.x };
+  const sculptures: P[] = [
+    { x: C.x + back.x * 8.5 + side.x * -3, z: C.z + back.z * 8.5 + side.z * -3 },
+    { x: C.x + back.x * 9.5 + side.x * 1.5, z: C.z + back.z * 9.5 + side.z * 1.5 },
+    { x: C.x + back.x * 7 + side.x * 5, z: C.z + back.z * 7 + side.z * 5 },
+  ];
+  // Funicular base station just inland of the walkway.
+  const station = { x: B2.x + n.x * 3.4 + t.x * 1.5, z: B2.z + n.z * 3.4 + t.z * 1.5 };
+  const stationSpot = { x: B2.x + (A2.x - B2.x) * 0.25 + t.x * 1.5, z: B2.z + (A2.z - B2.z) * 0.25 + t.z * 1.5 };
+  return { A, B, A2, B2, C, r, polyline, sculptures, station, stationSpot, tangent: t, back, inland: n };
+}
+
+/** Height of a hill's surface at a point (0 outside the hill), for funicular rails. */
+export function hillSurface(h: { x: number; z: number; radius: number; height: number }, x: number, z: number): number {
+  const rho = Math.hypot(x - h.x, z - h.z) / h.radius;
+  return rho >= 1 ? 0 : -0.5 + h.height * Math.sqrt(1 - rho * rho);
+}
+
+/** Funicular track from the base station up to the Igueldo summit. */
+export function funicularTrack(): P[] {
+  const base = peineLayout().station;
+  const top = { x: SUMMITS.igueldo.x + SUMMITS.igueldo.r - 1, z: SUMMITS.igueldo.z };
+  const pts: P[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24;
+    pts.push({ x: base.x + (top.x - base.x) * t, z: base.z + (top.z - base.z) * t });
+  }
+  return pts;
+}
+
+function landmarkBuildings(): BuildingDef[] {
+  const stone = '#e6d6b8';
+  const out: BuildingDef[] = [];
+  // Basilica de Santa Maria: nave and two towers, facing the lane to the south.
+  const bx = (BASILICA_BLOCK.minX + BASILICA_BLOCK.maxX) / 2;
+  out.push({ x: bx, z: -2.2, width: 5.6, depth: 5.4, height: 12.5, rotation: 0, color: stone, roofColor: '#9a6e4f', roof: 'gable', bay: 3.2, kind: 'landmark' });
+  for (const dx of [-2.3, 2.3]) {
+    out.push({ x: bx + dx, z: 0.9, width: 1.9, depth: 1.9, height: 16, rotation: 0, color: stone, roofColor: '#7b8f9a', roof: 'hip', bay: 1.9, kind: 'landmark' });
+  }
+  // Mercado de la Bretxa: a long, low hall with a green iron roof.
+  const mx = (BRETXA_BLOCK.minX + BRETXA_BLOCK.maxX) / 2;
+  out.push({ x: mx, z: 18.6, width: 6.6, depth: 6.4, height: 6.2, rotation: 0, color: '#f1e4cc', roofColor: '#5f8a7a', roof: 'gable', bay: 2.2, kind: 'landmark' });
+  // Miramar Palace: an English-cottage-style summer palace among lawns.
+  const mid = (MIRAMAR.from + MIRAMAR.to) / 2;
+  const n = shoreNormal(mid);
+  const p = bayPoint(mid, 28.5);
+  out.push({ x: p.x, z: p.z, width: 8.5, depth: 5.5, height: 8.5, rotation: Math.atan2(-n.x, -n.z), color: '#efe2c8', roofColor: '#6d5a52', roof: 'hip', bay: 2.2, kind: 'landmark' });
+  // The Kursaal's two glassy cubes are drawn separately; their footprints still block.
+  return out;
+}
+
+function grosHouses(rng: () => number): BuildingDef[] {
+  const out: BuildingDef[] = [];
+  for (const [minX, maxX] of GROS_COLS) {
+    for (const [minZ, maxZ] of GROS_ROWS) {
+      const count = 2;
+      const w = (maxX - minX) / count;
+      for (let i = 0; i < count; i++) {
+        out.push({
+          x: minX + w * (i + 0.5),
+          z: (minZ + maxZ) / 2,
+          width: w - 0.15,
+          depth: maxZ - minZ,
+          height: 10 + Math.floor(rng() * 4),
+          rotation: Math.PI,
+          color: pick(rng, WALL_PALETTE),
+          roofColor: pick(rng, ROOF_PALETTE),
+          roof: rng() < 0.5 ? 'hip' : 'gable',
+          bay: 2.6,
+          kind: 'gros',
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Travel stops: where you board, and where you arrive. */
+export function travelStops() {
+  const peine = peineLayout();
+  const ig = SUMMITS.igueldo;
+  const ur = SUMMITS.urgull;
+  const sc = SUMMITS.santaClara;
+  return {
+    funicularBase: peine.stationSpot,
+    funicularTop: { x: ig.x + ig.r - 2.5, z: ig.z + 1.5 },
+    urgullFoot: { x: 93.5, z: -8.4 },
+    urgullTop: { x: ur.x + ur.r - 2.2, z: ur.z + 3 },
+    boatQuay: { x: 52, z: -8.8 },
+    islandLanding: { x: sc.x + 2.2, z: sc.z + 1.6 },
+    taxiRank: { x: 34.5, z: 6.5 },
+  };
+}

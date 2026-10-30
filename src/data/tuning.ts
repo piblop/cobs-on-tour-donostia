@@ -5,7 +5,7 @@ export const SIM_DT = 1 / SIM_HZ;
 /** Longest real-time gap the loop will try to catch up on after a stall. */
 export const MAX_FRAME_SECONDS = 0.25;
 /** Hard cap on simulation steps per rendered frame. */
-export const MAX_STEPS_PER_FRAME = 5;
+export const MAX_STEPS_PER_FRAME = 8;
 
 export const movement = {
   walkSpeed: 4.2,
@@ -51,6 +51,18 @@ export const minigameTuning = {
     carrySeconds: 10,
     carryDrift: 1.1,
     carryControl: 2.4,
+    relaxedScale: 1.6,
+  },
+  txotx: {
+    /** Seconds per friend's pour. */
+    roundSeconds: 7,
+    /** How fast the cider arc's landing point wanders. */
+    wobbleSpeed: 1.1,
+    /** Fraction of the scene width the glass covers. */
+    glassWidth: 0.12,
+    glassWidthRelaxed: 0.2,
+    /** Glass movement in scene widths per second. */
+    glassSpeed: 0.75,
     relaxedScale: 1.6,
   },
 } as const;

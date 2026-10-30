@@ -42,6 +42,30 @@ export const bars: BarDef[] = [
     menu: ['burnt-cheesecake'],
     actionLabel: 'Cheesecake at Gazta',
   },
+  {
+    id: 'bretxa-market',
+    name: 'La Bretxa stalls',
+    inspiredBy: 'the Bretxa market',
+    blurb: 'Morning stalls: cheese, peppers, and fishmongers who know everyone.',
+    door: { x: 90.9, z: 12.8 },
+    facing: Math.PI,
+    awning: '#2f7f86',
+    activity: 'market',
+    menu: ['piparras', 'idiazabal-quince'],
+    actionLabel: 'Taste something at the stalls',
+  },
+  {
+    id: 'goiko',
+    name: 'Goiko Sagardotegia',
+    inspiredBy: 'the hillside cider houses around Astigarraga',
+    blurb: 'A remote cider house in the hills: long tables, huge barrels, and a fixed feast that simply arrives.',
+    door: { x: 34.5, z: 6.5 },
+    facing: Math.PI,
+    awning: '#8a5a32',
+    activity: 'cider',
+    menu: ['chorizo-cider', 'cod-omelette', 'fried-cod-peppers', 'txuleta', 'idiazabal-quince', 'sagardoa', 'apple-juice'],
+    actionLabel: 'Taxi up to a hillside cider house',
+  },
 ];
 
 /** The terrace table in the square where the crew eats together. */
