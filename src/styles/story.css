@@ -981,3 +981,109 @@
 #ui > .fade {
   pointer-events: none;
 }
+
+/* --- The ending montage ------------------------------------------------- */
+.ending-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 214, 160, 0.96), rgba(214, 120, 96, 0.97) 70%, rgba(80, 52, 70, 0.98));
+  pointer-events: auto;
+}
+.ending {
+  width: min(92vw, 720px);
+  min-height: min(80vh, 560px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 16px;
+}
+.ending-stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+.ending-card {
+  text-align: center;
+  color: var(--paper);
+  max-width: 600px;
+}
+.ending-card.photo,
+.ending-card.meal {
+  background: var(--paper);
+  color: var(--ink);
+  padding: 14px 14px 18px;
+  box-shadow: var(--shadow);
+  border-radius: 3px;
+}
+.ending-photo {
+  display: block;
+  width: min(80vw, 520px);
+  max-height: 52vh;
+  object-fit: cover;
+  margin: 0 auto 0.6rem;
+  background: #e9dfcf;
+}
+.ending-card.meal .ending-photo {
+  width: min(60vw, 320px);
+  object-fit: contain;
+  background: transparent;
+}
+.ending-heading {
+  font-family: var(--hand);
+  font-size: clamp(1.6rem, 5vw, 2.6rem);
+  margin: 0.2rem 0;
+  text-shadow: 0 2px 0 rgba(58, 44, 37, 0.25);
+}
+.ending-card.photo .ending-heading,
+.ending-card.meal .ending-heading {
+  font-size: 1.5rem;
+  text-shadow: none;
+}
+.ending-card.final .ending-heading {
+  font-size: clamp(2.2rem, 8vw, 4rem);
+}
+.ending-card.crew .ending-heading {
+  color: var(--crew, var(--gold));
+  -webkit-text-stroke: 1px rgba(58, 44, 37, 0.5);
+}
+.ending-text {
+  font-size: 1.15rem;
+  margin: 0.3rem 0 0;
+}
+.ending-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ending-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.ending-choices[hidden],
+.ending-foot .btn[hidden] {
+  display: none;
+}
+.book-page {
+  min-height: 300px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.book-day {
+  font-family: var(--hand);
+  font-size: 1.4rem;
+  margin: 0 0 0.4rem;
+}
+.book-moment {
+  font-weight: 700;
+}
+.book-caption {
+  font-family: var(--hand);
+  font-size: 1.15rem;
+}

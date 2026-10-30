@@ -108,7 +108,7 @@ export class Hud {
     if (this.promptKey.textContent !== key) this.promptKey.textContent = key;
     const w = this.prompt.offsetWidth;
     const x = Math.round(Math.min(window.innerWidth - w - 8, Math.max(8, screen.x - w / 2)));
-    const y = Math.round(Math.min(window.innerHeight - 50, Math.max(8, screen.y - 60)));
+    const y = Math.round(Math.min(window.innerHeight - 50, Math.max(8, screen.y + 26)));
     this.prompt.style.transform = `translate(${x}px, ${y}px)`;
     if (!this.promptVisible) {
       this.promptVisible = true;

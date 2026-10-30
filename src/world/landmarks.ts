@@ -232,8 +232,8 @@ export function createLandmarks(): Landmarks {
     });
   }
   // Spray that bursts up through the rocks now and then.
-  const sprayGeo = G(new THREE.SphereGeometry(0.25, 6, 5));
-  const sprayMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false });
+  const sprayGeo = G(new THREE.IcosahedronGeometry(0.16, 1));
+  const sprayMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.7, depthWrite: false });
   mats.push(sprayMat);
   const spray = new THREE.InstancedMesh(sprayGeo, sprayMat, 36);
   spray.frustumCulled = false;
@@ -425,15 +425,10 @@ export function createLandmarks(): Landmarks {
     ramp.rotation.x = -0.17;
   }
   // The Kursaal: two leaning glass cubes that glow at night.
-  const kursaalGlow = applyCutaway(M('#dcecef', { transparent: true, opacity: 0.62, emissive: '#ffe7b8', emissiveIntensity: 0 }), undefined, 'cutaway-glass');
+  const kursaalGlow = applyCutaway(M('#d6e6e9', { transparent: true, opacity: 0.9, emissive: '#ffe7b8', emissiveIntensity: 0 }), undefined, 'cutaway-glass');
   for (const k of KURSAAL) {
     const cube = mesh(new THREE.BoxGeometry(k.w, k.h, k.d), kursaalGlow, k.x, PROMENADE_Y + k.h / 2, k.z);
     cube.rotation.z = 0.04;
-    const edges = new THREE.LineSegments(G(new THREE.EdgesGeometry(cube.geometry)), new THREE.LineBasicMaterial({ color: '#9fb6bb' }));
-    mats.push(edges.material as THREE.Material);
-    edges.position.copy(cube.position);
-    edges.rotation.copy(cube.rotation);
-    group.add(edges);
   }
   // Surfers waiting for a wave off Zurriola.
   const surfers: THREE.Group[] = [];
@@ -494,9 +489,11 @@ export function createLandmarks(): Landmarks {
     ferry,
     kursaalGlow,
     update(time, reducedMotion) {
-      wheel.rotation.z = time * 0.25;
-      for (const g of gondolas) g.rotation.z = -wheel.rotation.z;
-      merry.rotation.y = time * 0.4;
+      if (!reducedMotion) {
+        wheel.rotation.z = time * 0.25;
+        for (const g of gondolas) g.rotation.z = -wheel.rotation.z;
+        merry.rotation.y = time * 0.4;
+      }
       for (const s of surfers) {
         s.position.y = Math.sin(time * 1.2 + (s.userData.phase as number)) * 0.12;
         s.rotation.z = Math.sin(time * 0.9 + (s.userData.phase as number)) * 0.06;
@@ -507,13 +504,15 @@ export function createLandmarks(): Landmarks {
         const t = cycle * 1.6;
         const alive = !reducedMotion && t < 1.3;
         tmp.position.set(b.origin.x + b.vx * t, alive ? 0.6 + b.vy * t - 4.9 * t * t : -10, b.origin.z + b.vz * t);
-        tmp.scale.setScalar(alive ? 0.6 + t : 0.01);
+        tmp.scale.setScalar(alive ? Math.max(0.05, 1 - t / 1.3) : 0.01);
         tmp.updateMatrix();
         spray.setMatrixAt(i, tmp.matrix);
       });
       spray.instanceMatrix.needsUpdate = true;
     },
     dispose() {
+      spray.dispose();
+      sleepers.dispose();
       for (const g of geos) g.dispose();
       for (const m of mats) m.dispose();
       for (const t of texs) t.dispose();

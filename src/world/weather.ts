@@ -86,6 +86,7 @@ export class Weather {
   }
 
   dispose(): void {
+    this.drops.dispose();
     this.geo.dispose();
     this.mat.dispose();
   }

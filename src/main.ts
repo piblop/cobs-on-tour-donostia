@@ -59,7 +59,9 @@ import { encounters, friendships, type EncounterDef, type FriendshipDef } from '
 import { foods as allFoods } from './data/foods.ts';
 import { showFeast } from './ui/feast.ts';
 import { showJournal } from './ui/journal.ts';
-import { makeDish } from './world/food3d.ts';
+import { foodThumbnail, makeDish } from './world/food3d.ts';
+import { playEnding, showBook, type EndingSlide } from './ui/ending.ts';
+import { trip as tripTuning } from './data/tuning.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -711,6 +713,9 @@ class Game {
       // Dev only: ?hour=21.5 overrides the starting time after a new trip resets it.
       const devHour = Number(new URLSearchParams(location.search).get('hour'));
       if (Number.isFinite(devHour) && devHour > 0) s.dayNight.setTime(devHour);
+      // Dev only: ?day=5 starts on a later day.
+      const devDay = Number(new URLSearchParams(location.search).get('day'));
+      if (Number.isFinite(devDay) && devDay > 1) s.dayNight.setTime(s.dayNight.hour, Math.floor(devDay));
       // Dev only: ?rain=1 starts a shower now.
       if (new URLSearchParams(location.search).get('rain')) s.weather.setRainNow(s.dayNight.day, s.dayNight.hour);
       // Dev only: ?spawn=x,z starts the crew somewhere specific for testing.
@@ -1517,6 +1522,12 @@ class Game {
       foods,
       memories: todays.map((m) => m.summary),
     });
+    if (day >= tripTuning.days && !this.flags.has('ended')) {
+      const carryOn = await this.runEnding();
+      if (!carryOn) return;
+      this.flags.add('ended');
+      toast(s.ui, 'One More Day: the city is still yours. Your collections come with you.');
+    }
     // A new morning.
     await gsap.to(this.fade, { opacity: 1, duration: this.reducedMotion ? 0.05 : 0.5 });
     s.dayNight.setTime(MORNING_HOUR, day + 1);
@@ -1536,6 +1547,91 @@ class Game {
     void this.autosave();
     await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.8 });
     await this.morningPlanning();
+  }
+
+  // --- The ending ------------------------------------------------------------------------
+
+  private endingSlides(): EndingSlide[] {
+    const s = this.s;
+    const days = s.dayNight.day;
+    const slides: EndingSlide[] = [{ kind: 'title', heading: `${days} days in Donostia`, text: 'Cobs on Tour' }];
+    // The player's own polaroids, spread across the trip.
+    const photos = this.photos.filter((p) => this.photoUrls.has(p.id));
+    const step = Math.max(1, Math.ceil(photos.length / 7));
+    for (let i = 0; i < photos.length; i += step) {
+      slides.push({ kind: 'photo', heading: photos[i].title, text: `Day ${photos[i].day}`, image: this.photoUrls.get(photos[i].id) ?? null });
+    }
+    if (photos.length === 0) {
+      slides.push({ kind: 'memory', heading: 'The bay at golden hour', text: 'No photos this time. The best bits were in our heads anyway.' });
+    }
+    // Favourite meals: marked favourites first, then the most-loved plates.
+    const counts = new Map<string, number>();
+    for (const f of this.foodsTried) counts.set(f.id, (counts.get(f.id) ?? 0) + 1);
+    const meals = [...this.favourites, ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id)].filter((id, i, arr) => arr.indexOf(id) === i).slice(0, 3);
+    meals.forEach((id, i) => {
+      const food = foodById(id);
+      if (!food) return;
+      const who = (['annette', 'huw', 'romy', 'paulo'] as CrewId[])[i % 4];
+      slides.push({ kind: 'meal', heading: food.name, text: `${crewData.find((c) => c.id === who)?.name}: “${food.reactions[who]}”`, image: foodThumbnail(food) });
+    });
+    if (meals.length === 0) slides.push({ kind: 'meal', heading: 'So many pintxos', text: 'We will be back for the ones we missed.' });
+    // Real moments: friendships, encounters and the silly bits that actually happened.
+    const notable = /^(friend:|met:|ordered:|rode:|robbed:|splashed:|heard:|found:|watched:|played:|wobbled:|missed:)/;
+    const moments = this.memories.all().filter((m) => notable.test(m.key));
+    for (const m of moments.slice(0, 5)) slides.push({ kind: 'memory', heading: 'Remember when…', text: m.summary });
+    if (moments.length === 0) slides.push({ kind: 'memory', heading: 'Remember when…', text: 'We walked the whole bay and talked about dinner the entire time.' });
+    // The crew, one at a time.
+    for (const c of crewData) {
+      slides.push({ kind: 'crew', heading: c.name, text: c.catchphrases[0], colour: c.colors.top });
+    }
+    slides.push({ kind: 'final', heading: 'See you next tour.' });
+    return slides;
+  }
+
+  /** Plays the montage and handles the choices. Resolves true to continue with One More Day. */
+  private async runEnding(): Promise<boolean> {
+    const s = this.s;
+    this.audio.setDucked(true);
+    for (;;) {
+      this.audio.playEndingTheme();
+      const choice = await playEnding(s.ui, this.endingSlides(), this.reducedMotion, () => undefined);
+      if (choice === 'rewatch') continue;
+      if (choice === 'scrapbook') {
+        await showBook(
+          s.ui,
+          this.pages.map((p) => ({
+            day: p.day,
+            moment: this.memories.all().find((m) => m.key === p.moment)?.summary ?? null,
+            caption: p.caption,
+            photos: p.photoIds.map((id) => ({ title: this.photos.find((x) => x.id === id)?.title ?? '', url: this.photoUrls.get(id) ?? null })),
+            foods: p.foods,
+            memories: p.memories,
+          })),
+          this.reducedMotion,
+        );
+        continue;
+      }
+      if (choice === 'new-trip') {
+        const sure = await choose(
+          s.ui,
+          'Start a new trip?',
+          'This replaces the trip saved in this browser, including its scrapbook and photos.',
+          [
+            { label: 'Keep this trip', value: false },
+            { label: 'Start fresh', value: true },
+          ],
+          this.reducedMotion,
+        );
+        if (!sure) continue;
+        await this.saves.clear();
+        this.tripStarted = false;
+        this.audio.setDucked(false);
+        this.showTitleScreen();
+        return false;
+      }
+      this.audio.setDucked(false);
+      return true;
+    }
   }
 
   onVisibility = (visible: boolean): void => {

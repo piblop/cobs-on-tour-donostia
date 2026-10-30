@@ -56,7 +56,7 @@ export const bars: BarDef[] = [
   },
   {
     id: 'goiko',
-    name: 'Goiko Sagardotegia',
+    name: 'Mendiburu Sagardotegia',
     inspiredBy: 'the hillside cider houses around Astigarraga',
     blurb: 'A remote cider house in the hills: long tables, huge barrels, and a fixed feast that simply arrives.',
     door: { x: 34.5, z: 6.5 },

@@ -15,7 +15,7 @@ export function showFeast(
   reducedMotion: boolean,
 ): Promise<void> {
   return new Promise((resolve) => {
-    const list = h('ol', { class: 'feast-list' });
+    const list = h('ol', { class: 'feast-list', attrs: { 'aria-live': 'polite' } });
     const next = button('Next course', () => advance(), 'btn primary');
     const box = h(
       'div',
@@ -31,9 +31,7 @@ export function showFeast(
     next.focus();
     const order: CrewId[] = ['huw', 'romy', 'annette', 'paulo'];
     let i = 0;
-    let timer = 0;
     const advance = () => {
-      window.clearTimeout(timer);
       if (i >= courses.length) {
         finish();
         return;
@@ -52,10 +50,8 @@ export function showFeast(
       if (!reducedMotion) gsap.fromTo(li, { x: -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' });
       i++;
       next.textContent = i >= courses.length ? 'Lovely. Taxi home' : 'Next course';
-      timer = window.setTimeout(advance, 3600);
     };
     const finish = () => {
-      window.clearTimeout(timer);
       release();
       gsap.to(layer, { opacity: 0, duration: reducedMotion ? 0.1 : 0.35, onComplete: () => (layer.remove(), resolve()) });
     };
