@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Cobs on Tour: Donostia. A cosy exploration game about four friends discovering San Sebastián." />
+    <meta name="color-scheme" content="light" />
+    <title>Cobs on Tour: Donostia</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body data-state="loading">
+    <div id="app">
+      <div id="stage"></div>
+      <div id="ui" aria-live="polite"></div>
+      <div id="loading" class="loading" role="status">
+        <div class="loading-card paper">
+          <p class="hand">Packing the suitcases…</p>
+          <div class="loading-bar" aria-hidden="true"><span id="loading-fill"></span></div>
+          <p id="loading-step" class="loading-step">Starting</p>
+        </div>
+      </div>
+      <noscript>
+        <div class="fatal paper">
+          <h1>Cobs on Tour: Donostia</h1>
+          <p>This game needs JavaScript to run.</p>
+        </div>
+      </noscript>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

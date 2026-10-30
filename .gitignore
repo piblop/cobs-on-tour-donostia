@@ -1,0 +1,26 @@
+# Dependencies and builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets and local env
+.env
+.env.*
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Local scratch
+.shots.mjs

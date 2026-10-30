@@ -1,0 +1,607 @@
+:root {
+  --paper: #fbf5e9;
+  --paper-texture: none;
+  --ink: #3a2c25;
+  --ink-soft: #6b584c;
+  --accent: #e86f5a;
+  --accent-dark: #c4513f;
+  --sea: #56b7bf;
+  --gold: #f2c14e;
+  --focus: #2f7f86;
+  --shadow: 0 10px 30px rgba(60, 40, 25, 0.22), 0 2px 6px rgba(60, 40, 25, 0.18);
+  --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+  --hand: 'Segoe Print', 'Bradley Hand', 'Chalkboard SE', 'Comic Sans MS', 'Marker Felt', cursive;
+  --body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --text-scale: 1;
+  font-size: calc(17px * var(--text-scale));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffd6ad;
+  color: var(--ink);
+  font-family: var(--body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app,
+#stage {
+  position: fixed;
+  inset: 0;
+}
+
+#stage canvas {
+  display: block;
+  outline: none;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ui > * {
+  pointer-events: auto;
+}
+
+.hand {
+  font-family: var(--hand);
+}
+
+.paper {
+  background-color: var(--paper);
+  background-image: var(--paper-texture);
+  background-size: 256px 256px;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+/* Buttons: soft lift on hover, a press you can feel. */
+.btn {
+  appearance: none;
+  border: 2px solid var(--ink);
+  background: #fffaf0;
+  color: var(--ink);
+  font: 600 1rem/1 var(--body);
+  padding: 0.85rem 1.4rem;
+  min-height: 48px;
+  min-width: 48px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--ink);
+  transition:
+    transform 160ms var(--ease),
+    box-shadow 160ms var(--ease),
+    background-color 160ms var(--ease);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 var(--ink);
+}
+
+.btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+/* White on #b0443a is about 5:1, comfortably above WCAG AA for button text. */
+.btn.primary {
+  background: #b0443a;
+  border-color: #7f2e27;
+  color: #fff;
+  box-shadow: 0 3px 0 #7f2e27;
+}
+
+.btn.primary:hover {
+  box-shadow: 0 5px 0 #7f2e27;
+}
+
+.btn:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.btn.quiet {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn.quiet:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* --- Loading ------------------------------------------------------------- */
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  background: linear-gradient(#9fd3e8, #ffd6ad);
+  transition: opacity 500ms var(--ease);
+}
+
+.loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  padding: 1.6rem 2rem;
+  text-align: center;
+  width: min(360px, calc(100vw - 32px));
+  transform: rotate(-1deg);
+}
+
+.loading-card .hand {
+  font-size: 1.4rem;
+  margin: 0 0 1rem;
+}
+
+.loading-bar {
+  height: 10px;
+  border-radius: 99px;
+  background: #eadfcb;
+  overflow: hidden;
+}
+
+.loading-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--sea);
+  border-radius: inherit;
+  transition: width 200ms linear;
+}
+
+.loading-step {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* --- Title ---------------------------------------------------------------- */
+.title-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255, 230, 200, 0) 30%, rgba(80, 50, 30, 0.28) 100%);
+}
+
+.title-card {
+  position: relative;
+  width: min(520px, 100%);
+  padding: 2.2rem 2.2rem 1.8rem;
+  text-align: center;
+  transform: rotate(-1.2deg);
+}
+
+.title-card::before {
+  /* A strip of washi tape. */
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 130px;
+  height: 30px;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(127, 214, 207, 0.75);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.title-kicker {
+  margin: 0;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.title-name {
+  margin: 0.3rem 0 0;
+  font-family: var(--hand);
+  font-size: clamp(2.2rem, 7vw, 3.4rem);
+  line-height: 1.05;
+  color: var(--accent-dark);
+}
+
+.title-place {
+  display: inline-block;
+  margin: 0.6rem 0 1.2rem;
+  padding: 0.25rem 0.9rem;
+  border: 3px double var(--sea);
+  color: #2f7f86;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transform: rotate(2deg);
+  border-radius: 4px;
+}
+
+.title-blurb {
+  margin: 0 auto 1.4rem;
+  max-width: 34ch;
+  color: var(--ink-soft);
+}
+
+.title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: center;
+}
+
+.title-foot {
+  margin: 1.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+/* --- Controls list ---------------------------------------------------------- */
+.controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.45rem 1rem;
+  margin: 1rem 0 0;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.controls dt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.controls dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.1em 0.45em;
+  border: 1.5px solid var(--ink);
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  background: #fff;
+  font: 700 0.82rem/1.3 var(--body);
+  text-align: center;
+}
+
+/* --- HUD ------------------------------------------------------------------ */
+.area-banner {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.6rem 1.6rem 0.7rem;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.area-banner h2 {
+  margin: 0;
+  font-family: var(--hand);
+  font-size: 1.7rem;
+  color: var(--accent-dark);
+}
+
+.area-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.prompt {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem 0.45rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.96);
+  border: 2px solid var(--ink);
+  box-shadow: 0 4px 0 rgba(58, 44, 37, 0.85);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+}
+
+.prompt.high-contrast {
+  background: #111;
+  color: #fff;
+  border-color: #fff;
+}
+
+.prompt .key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.hint {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  padding: 0.7rem 1rem;
+  max-width: min(420px, calc(100vw - 40px));
+  font-size: 0.92rem;
+  pointer-events: none;
+  opacity: 0;
+  transform: rotate(-0.6deg);
+}
+
+.hint kbd {
+  margin: 0 0.1em;
+}
+
+.collection-chip {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.85rem 0.45rem 0.55rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  pointer-events: none;
+  transform: rotate(1.2deg);
+}
+
+.collection-chip .mini-polaroid {
+  width: 26px;
+  height: 30px;
+  background: #fff;
+  border: 1px solid #d9cdb8;
+  padding: 3px 3px 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.collection-chip .mini-polaroid span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(#9fd3e8 55%, #f1dcae 55%);
+}
+
+.pause-hint {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  font-size: 1rem;
+  padding: 0.35rem 0.75rem;
+  pointer-events: none;
+  color: var(--ink);
+  background: rgba(251, 245, 233, 0.94);
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(60, 40, 25, 0.18);
+}
+
+/* --- Polaroid discovery card ---------------------------------------------- */
+.card-layer {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(58, 44, 37, 0.18);
+}
+
+.polaroid {
+  position: relative;
+  width: min(440px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 1rem 1rem 1.3rem;
+  background: #fffdf8;
+  box-shadow: var(--shadow);
+  transform: rotate(-2deg);
+}
+
+.polaroid .photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: linear-gradient(#9fd3e8 55%, #f1dcae 55%);
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.polaroid .stamp {
+  position: absolute;
+  top: 1.6rem;
+  right: 1.4rem;
+  padding: 0.2rem 0.6rem;
+  border: 3px solid rgba(196, 81, 63, 0.85);
+  color: rgba(196, 81, 63, 0.9);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  transform: rotate(9deg);
+  background: rgba(255, 253, 248, 0.6);
+  border-radius: 4px;
+}
+
+.polaroid h2 {
+  margin: 0.8rem 0 0.1rem;
+  font-family: var(--hand);
+  font-size: 1.8rem;
+  color: var(--accent-dark);
+}
+
+.polaroid .caption {
+  margin: 0 0 0.7rem;
+  font-family: var(--hand);
+  color: var(--ink);
+}
+
+.polaroid .fact {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.85rem;
+  background: #f6efe0;
+  border-left: 4px solid var(--sea);
+  font-size: 0.95rem;
+  border-radius: 0 6px 6px 0;
+}
+
+.polaroid .fact strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #2f7f86;
+}
+
+.polaroid .card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* --- Menus ---------------------------------------------------------------- */
+.menu-layer {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(58, 44, 37, 0.32);
+}
+
+.menu {
+  width: min(400px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 1.6rem;
+  transform: rotate(0.6deg);
+}
+
+.menu h2 {
+  margin: 0 0 1rem;
+  font-family: var(--hand);
+  font-size: 1.9rem;
+  color: var(--accent-dark);
+  text-align: center;
+}
+
+.menu .stack {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.menu .note {
+  margin: 1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+/* --- Fades and fatal screens ----------------------------------------------- */
+.fade {
+  position: fixed;
+  inset: 0;
+  background: #fbf5e9;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.fatal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, calc(100vw - 32px));
+  height: fit-content;
+  padding: 1.6rem 1.8rem;
+  z-index: 60;
+}
+
+.fatal h1 {
+  margin: 0 0 0.5rem;
+  font-family: var(--hand);
+  color: var(--accent-dark);
+}
+
+.fatal pre {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  background: #f3ead8;
+  padding: 0.6rem;
+  border-radius: 4px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.dev-overlay {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  padding: 0.5rem 0.7rem;
+  background: rgba(20, 20, 20, 0.78);
+  color: #d8ffe0;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: pre;
+  z-index: 70;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .loading {
+    transition: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .collection-chip {
+    top: auto;
+    bottom: 18px;
+    right: 18px;
+  }
+  .hint {
+    bottom: 70px;
+  }
+}
