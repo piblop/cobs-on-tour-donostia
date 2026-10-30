@@ -239,6 +239,13 @@ export class CameraRig {
     return this.returnToFollow(seconds);
   }
 
+  /** Hold the camera at an exact shot (vehicles in travel scenes drive it each frame). */
+  holdShot(position: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }): void {
+    if (!this.cinematic) this.cinematic = gsap.timeline();
+    Object.assign(this.cine, { px: position.x, py: position.y, pz: position.z, tx: target.x, ty: target.y, tz: target.z });
+    this.applyCine();
+  }
+
   /** Jump a running glide straight to its end. */
   skip(): void {
     this.cinematic?.progress(1);

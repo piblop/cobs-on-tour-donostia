@@ -4,7 +4,7 @@ A cosy, single-player browser exploration game about four friends (Paulo, Annett
 
 Built with Vite, TypeScript, three.js and GSAP. All art and audio are procedural or original. The game runs entirely in the browser: no backend, accounts, analytics or network requests.
 
-> **Status:** Milestones 1–3 (foundation; friends and atmosphere; one complete holiday day). See `docs/GAME_SPEC.md` for the full plan.
+> **Status:** Milestones 1–4 (foundation; friends and atmosphere; one complete holiday day; city discoveries and food). See `docs/GAME_SPEC.md` for the full plan.
 
 ## Controls
 
@@ -17,6 +17,7 @@ Built with Vite, TypeScript, three.js and GSAP. All art and audio are procedural
 | Turn camera | Z / C, or right-drag | Right stick left/right |
 | Reset camera | X | Right stick click |
 | Switch friend | Tab | Back / View |
+| Journal | J | (pause menu) |
 | Pause | Esc | Start |
 
 ## Running locally

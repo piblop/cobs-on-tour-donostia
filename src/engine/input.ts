@@ -14,7 +14,8 @@ export type Action =
   | 'up'
   | 'down'
   | 'left'
-  | 'right';
+  | 'right'
+  | 'journal';
 
 const KEY_ACTIONS: Record<string, Action> = {
   KeyE: 'interact',
@@ -25,6 +26,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyX: 'resetCamera',
   Tab: 'switchFriend',
   F3: 'devOverlay',
+  KeyJ: 'journal',
 };
 
 const MOVE_KEYS: Record<string, [number, number]> = {

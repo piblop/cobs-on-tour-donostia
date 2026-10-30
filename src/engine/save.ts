@@ -44,6 +44,11 @@ export interface TripData {
   flags: string[];
   pages: ScrapbookPage[];
   photos: PhotoMeta[];
+  /** Personal captions for discovered sights. */
+  captions: Record<string, string>;
+  favourites: string[];
+  encounters: string[];
+  friendships: string[];
 }
 
 const CREW_IDS = new Set(['paulo', 'annette', 'huw', 'romy']);
@@ -128,6 +133,15 @@ export function sanitiseTrip(raw: unknown): TripData | null {
     flags: strList(r.flags, 200),
     pages,
     photos,
+    captions: Object.fromEntries(
+      Object.entries(r.captions && typeof r.captions === 'object' ? (r.captions as Record<string, unknown>) : {})
+        .filter(([k, v]) => typeof v === 'string' && k.length < 80)
+        .slice(0, 100)
+        .map(([k, v]) => [k, (v as string).slice(0, 80)]),
+    ),
+    favourites: strList(r.favourites, 100),
+    encounters: strList(r.encounters, 100),
+    friendships: strList(r.friendships, 100),
   };
 }
 

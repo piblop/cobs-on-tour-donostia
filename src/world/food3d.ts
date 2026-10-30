@@ -121,6 +121,46 @@ export function makeDish(food: FoodDef): Dish {
       top.rotation.y = -0.5;
       break;
     }
+    case 'chorizo': {
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const slice = add(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 12), m(c.base), Math.cos(a) * 0.15, 0.08, Math.sin(a) * 0.15);
+        slice.rotation.set(0.3, 0, 0.2);
+      }
+      add(new THREE.CylinderGeometry(0.24, 0.24, 0.01, 18), m(c.topping, { transparent: true, opacity: 0.75 }), 0, 0.055, 0);
+      break;
+    }
+    case 'omelette': {
+      const fold = add(new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), m(c.base), 0, 0.05, 0);
+      fold.scale.set(1.25, 0.55, 0.85);
+      for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.06, 0.02, 0.04), m(c.topping), -0.12 + i * 0.08, 0.17, 0.02);
+      break;
+    }
+    case 'cod': {
+      for (let i = 0; i < 2; i++) {
+        const piece = add(new THREE.BoxGeometry(0.2, 0.08, 0.14), m(c.base), -0.08 + i * 0.17, 0.09, -0.03);
+        piece.rotation.y = i * 0.4;
+      }
+      for (let i = 0; i < 4; i++) {
+        const pepper = add(new THREE.CapsuleGeometry(0.03, 0.18, 3, 6), m(c.topping), -0.14 + i * 0.09, 0.08, 0.12);
+        pepper.rotation.z = Math.PI / 2;
+      }
+      break;
+    }
+    case 'cheese': {
+      const wedge = add(new THREE.CylinderGeometry(0.22, 0.22, 0.14, 16, 1, false, 0, Math.PI / 3), m(c.base), -0.05, 0.11, 0);
+      wedge.rotation.y = -0.5;
+      add(new THREE.BoxGeometry(0.16, 0.08, 0.12), m(c.topping), 0.13, 0.08, 0.04);
+      for (let i = 0; i < 3; i++) add(new THREE.DodecahedronGeometry(0.035, 0), m(c.accent), 0.08 + i * 0.05, 0.07, -0.14);
+      break;
+    }
+    case 'pickles': {
+      for (let i = 0; i < 6; i++) {
+        const p = add(new THREE.CapsuleGeometry(0.022, 0.32, 3, 6), m(i % 2 ? c.base : c.topping), -0.12 + i * 0.05, 0.07, 0);
+        p.rotation.set(Math.PI / 2, 0, 0.15 * (i - 3));
+      }
+      break;
+    }
     case 'drink': {
       const glass = add(new THREE.CylinderGeometry(0.09, 0.07, 0.3, 14, 1, true), m('#e8f4f2', { transparent: true, opacity: 0.45, side: THREE.DoubleSide }), 0, 0.15, 0);
       glass.castShadow = false;

@@ -3,12 +3,14 @@ import { areas, locations } from '../data/locations.ts';
 import { bars } from '../data/restaurants.ts';
 import type { Area, BarDef, LocationDef } from '../data/types.ts';
 import { groundY, propLayout, type Prop } from './map.ts';
+import { travelLinks, type TravelDef } from './travel.ts';
 
 /** Anything the crew can use: a discovery, or a bench to sit on together. */
 export type Spot =
   | { kind: 'discovery'; id: string; x: number; z: number; radius: number; label: string; loc: LocationDef }
   | { kind: 'bench'; id: string; x: number; z: number; radius: number; label: string; bench: Prop }
-  | { kind: 'bar'; id: string; x: number; z: number; radius: number; label: string; bar: BarDef };
+  | { kind: 'bar'; id: string; x: number; z: number; radius: number; label: string; bar: BarDef }
+  | { kind: 'travel'; id: string; x: number; z: number; radius: number; label: string; travel: TravelDef };
 
 /**
  * Usable spots in the world. Discoveries have a soft glowing ring and a
@@ -33,6 +35,9 @@ export class Interactables {
     }
     for (const bar of bars) {
       this.add({ kind: 'bar', id: `bar-${bar.id}`, x: bar.door.x, z: bar.door.z, radius: 1.9, label: bar.actionLabel, bar });
+    }
+    for (const t of travelLinks()) {
+      this.add({ kind: 'travel', id: `travel-${t.id}`, x: t.from.x, z: t.from.z, radius: 1.8, label: t.label, travel: t });
     }
     propLayout()
       .filter((p) => p.kind === 'bench')

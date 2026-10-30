@@ -27,6 +27,10 @@ function sampleTrip(): TripData {
     flags: [],
     pages: [{ day: 1, moment: 'tasted:gilda', caption: 'Best night', photoIds: ['p1'], foods: ['Gilda'], memories: ['Tried gilda'] }],
     photos: [{ id: 'p1', day: 1, title: 'Dinner at Gozo Gozo' }],
+    captions: { 'la-concha-railing': 'The best view' },
+    favourites: ['gilda'],
+    encounters: ['dog'],
+    friendships: ['umbrella'],
   };
 }
 

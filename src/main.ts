@@ -42,12 +42,24 @@ import { crew as crewData } from './data/crew.ts';
 import { SaveStore, dataUrlToBlob, type PhotoMeta, type ScrapbookPage, type TripData } from './engine/save.ts';
 import { createBars, type BarDressing } from './world/bars.ts';
 import { cutaway } from './world/materials.ts';
-import { bayPoint } from './world/map.ts';
+import { bayPoint, PROMENADE_Y } from './world/map.ts';
 import { serveMeal, type SceneContext } from './scenes/meal.ts';
 import { showArrivalTicket, choose, toast } from './ui/story.ts';
 import { showPlanning } from './ui/planning.ts';
 import { showScrapbookPage } from './ui/scrapbook.ts';
 import { playPintxosCrawl } from './minigames/pintxosCrawl.ts';
+import { playTxotx } from './minigames/txotx.ts';
+import { createLandmarks, type Landmarks } from './world/landmarks.ts';
+import { createNpcs, type Npcs } from './world/npcs.ts';
+import { Weather } from './world/weather.ts';
+import { Crowds } from './world/crowds.ts';
+import type { TravelDef } from './world/travel.ts';
+import { playTravel } from './scenes/travel.ts';
+import { encounters, friendships, type EncounterDef, type FriendshipDef } from './data/encounters.ts';
+import { foods as allFoods } from './data/foods.ts';
+import { showFeast } from './ui/feast.ts';
+import { showJournal } from './ui/journal.ts';
+import { makeDish } from './world/food3d.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -81,6 +93,10 @@ interface Systems {
   dayNight: DayNight;
   settings: SettingsStore;
   bars: BarDressing;
+  landmarks: Landmarks;
+  npcs: Npcs;
+  weather: Weather;
+  crowds: Crowds;
 }
 
 const ARRIVAL = { x0: 30, d: 12.5 };
@@ -140,6 +156,15 @@ class Game {
   private lateAskedDay = 0;
   private warnedSave = false;
   private tripStarted = false;
+  private captions: Record<string, string> = {};
+  private favourites = new Set<string>();
+  private encountersDone = new Set<string>();
+  private friendshipsDone = new Set<string>();
+  private encounterBusy = false;
+  private encounterTimer = 0;
+  private friendTimer = 0;
+  private friendship: FriendshipDef | null = null;
+  private wasRaining = false;
   /** Warm lamplight that keeps the friends' faces readable at night. */
   private crewLight = new THREE.PointLight('#ffd2a0', 0, 11, 1.3);
   perf: PerfOverlay | null = null;
@@ -151,7 +176,8 @@ class Game {
     this.hud.setCount(0, locations.length);
     this.bubbles = new Bubbles(s.ui);
     this.fade = h('div', { class: 'fade', attrs: { 'aria-hidden': 'true' } });
-    document.body.append(this.fade);
+    // Inside the UI layer, so story overlays and toasts can sit above the curtain.
+    s.ui.append(this.fade);
     for (const m of s.crew.members) this.needs.set(m.def.id, new Needs(m.def));
     queueMicrotask(() => this.wire());
 
@@ -300,6 +326,16 @@ class Game {
       cutaway.uCutRadius.value = tight ? 5.2 : 3.6;
     }
     this.checkSunset(dt, speed);
+    this.encounterTimer -= dt;
+    if (this.encounterTimer <= 0) {
+      this.encounterTimer = 0.5;
+      this.checkEncounters();
+    }
+    this.friendTimer -= dt;
+    if (this.friendTimer <= 0) {
+      this.friendTimer = 1;
+      this.friendship = this.availableFriendship();
+    }
   };
 
   /** A once-a-day moment: standing by the railing as the sun goes down. */
@@ -355,6 +391,18 @@ class Game {
     s.scenery.update(this.decorTime);
     for (const fn of this.frameHooks) fn(this.decorTime);
     s.interactables.update(this.decorTime, this.reducedMotion);
+    s.landmarks.update(this.decorTime, this.reducedMotion);
+    s.landmarks.kursaalGlow.emissiveIntensity = s.dayNight.night * 0.45;
+    s.npcs.update(frozen ? 0 : frameDt, this.decorTime, this.reducedMotion);
+    s.crowds.update(frozen ? 0 : frameDt, s.dayNight.hour, this.reducedMotion);
+    if (!frozen && this.state.name !== 'title') s.weather.update(frameDt, s.dayNight.day, s.dayNight.hour, leadPos, this.reducedMotion);
+    s.dayNight.overcast = s.weather.intensity;
+    this.audio.setRain(s.weather.intensity);
+    if (s.weather.raining !== this.wasRaining) {
+      this.wasRaining = s.weather.raining;
+      for (const m of s.crew.members) m.character.setUmbrella(this.wasRaining);
+      if (this.wasRaining) this.say('weather:rain', PRIORITY.ambient, undefined, 0);
+    }
     this.updatePrompt();
 
     if (this.state.gameplayActive) {
@@ -465,16 +513,20 @@ class Game {
     }
     const key = s.input.device === 'gamepad' ? 'A' : 'E';
     const lead = s.crew.leader;
+    const overLeader = (label: string) => {
+      this.anchor.copy(lead.renderPos).setY(lead.renderPos.y + 3.6).project(s.rig.camera);
+      this.hud.setPrompt(label, { x: (this.anchor.x * 0.5 + 0.5) * window.innerWidth, y: (-this.anchor.y * 0.5 + 0.5) * window.innerHeight }, key);
+    };
     if (s.crew.seated) {
       s.interactables.setActive(null);
-      this.anchor.copy(lead.renderPos).setY(lead.renderPos.y + 3.6).project(s.rig.camera);
-      this.hud.setPrompt('Stand up', { x: (this.anchor.x * 0.5 + 0.5) * window.innerWidth, y: (-this.anchor.y * 0.5 + 0.5) * window.innerHeight }, key);
+      overLeader(this.friendship?.when.seated ? `♥ ${this.friendship.title}` : 'Stand up');
       return;
     }
     const spot = s.interactables.nearest(lead.mover.x, lead.mover.z);
     s.interactables.setActive(spot?.id ?? null);
     if (!spot) {
-      this.hud.setPrompt(null, null, '');
+      if (this.friendship && !this.friendship.when.seated) overLeader(`♥ ${this.friendship.title}`);
+      else this.hud.setPrompt(null, null, '');
       return;
     }
     s.interactables.promptAnchor(spot.id, this.anchor).project(s.rig.camera);
@@ -520,6 +572,7 @@ class Game {
         if (action === 'pause') this.openPause();
         else if (action === 'resetCamera') s.rig.resetView();
         else if (action === 'switchFriend') this.switchFriend();
+        else if (action === 'journal') void this.openJournal('sights');
         else if (action === 'interact' || action === 'confirm') this.interact();
         break;
       case 'cinematic':
@@ -547,11 +600,19 @@ class Game {
   private interact(): void {
     const s = this.s;
     if (s.crew.seated) {
-      this.standUp();
+      if (this.friendship?.when.seated) void this.playFriendship(this.friendship);
+      else this.standUp();
       return;
     }
     const spot = s.interactables.nearest(s.crew.leader.mover.x, s.crew.leader.mover.z);
-    if (!spot) return;
+    if (!spot) {
+      if (this.friendship) void this.playFriendship(this.friendship);
+      return;
+    }
+    if (spot.kind === 'travel') {
+      void this.travel(spot.travel);
+      return;
+    }
     if (spot.kind === 'discovery') void this.discover(spot.loc);
     else if (spot.kind === 'bar') void this.visitBar(spot.bar);
     else void this.sit(spot);
@@ -650,6 +711,8 @@ class Game {
       // Dev only: ?hour=21.5 overrides the starting time after a new trip resets it.
       const devHour = Number(new URLSearchParams(location.search).get('hour'));
       if (Number.isFinite(devHour) && devHour > 0) s.dayNight.setTime(devHour);
+      // Dev only: ?rain=1 starts a shower now.
+      if (new URLSearchParams(location.search).get('rain')) s.weather.setRainNow(s.dayNight.day, s.dayNight.hour);
       // Dev only: ?spawn=x,z starts the crew somewhere specific for testing.
       const sp = new URLSearchParams(location.search).get('spawn')?.split(',').map(Number);
       if (sp && sp.length === 2 && sp.every(Number.isFinite)) {
@@ -769,6 +832,7 @@ class Game {
         toTitle: () => void this.backToTitle(),
         settings: this.settingsFor,
         history: () => this.bubbles.history,
+        journal: () => void this.journalFromMenu(),
         callItANight: this.s.dayNight.hour >= 19.5 || this.s.dayNight.hour < 4 ? () => void this.callItANightFromMenu() : undefined,
       },
       this.reducedMotion,
@@ -831,6 +895,11 @@ class Game {
     this.flags.clear();
     this.pages = [];
     this.photos = [];
+    this.captions = {};
+    this.favourites.clear();
+    this.encountersDone.clear();
+    this.friendshipsDone.clear();
+    this.friendship = null;
     for (const url of this.photoUrls.values()) if (url.startsWith('blob:')) URL.revokeObjectURL(url);
     this.photoUrls.clear();
     this.vibe = new Vibe();
@@ -864,6 +933,10 @@ class Game {
       goal: this.goal && !this.goalDone ? this.goal : null,
       flags: [...this.flags],
       pages: this.pages,
+      captions: { ...this.captions },
+      favourites: [...this.favourites],
+      encounters: [...this.encountersDone],
+      friendships: [...this.friendshipsDone],
       photos: this.photos,
     };
   }
@@ -886,6 +959,10 @@ class Game {
     this.flags = new Set(d.flags);
     this.pages = d.pages;
     this.photos = d.photos;
+    this.captions = { ...d.captions };
+    this.favourites = new Set(d.favourites);
+    this.encountersDone = new Set(d.encounters);
+    this.friendshipsDone = new Set(d.friendships);
     this.sunsetDay = this.memories.all().some((m) => m.key === 'watched:sunset' && m.day === d.day) ? d.day : 0;
     // Put the leader back in charge and everyone where they were.
     while (s.crew.leader.def.id !== d.leader) s.crew.switchLeader();
@@ -1051,6 +1128,8 @@ class Game {
   private async visitBar(bar: BarDef): Promise<void> {
     const s = this.s;
     if (this.state.name !== 'exploring') return;
+    if (bar.activity === 'market') return this.visitMarket(bar);
+    if (bar.activity === 'cider') return this.visitCiderHouse(bar);
     this.banter.interrupt();
     this.bubbles.clear();
     this.state.set('scene');
@@ -1120,6 +1199,268 @@ class Game {
     this.state.set('exploring');
     s.renderer.canvas.focus({ preventScroll: true });
     void this.autosave();
+  }
+
+  // --- Travel ----------------------------------------------------------------------------
+
+  private async travel(def: TravelDef): Promise<void> {
+    const s = this.s;
+    if (this.state.name !== 'exploring') return;
+    this.banter.interrupt();
+    this.bubbles.clear();
+    this.state.set('cinematic');
+    this.audio.setDucked(true);
+    const ctx = this.sceneContext();
+    await playTravel(
+      {
+        ...ctx,
+        landmarks: s.landmarks,
+        skipSignal: () => new Promise<void>((resolve) => (this.advance = resolve)),
+      },
+      def,
+    );
+    this.advance = null;
+    s.crew.teleport(def.to.x, def.to.z, def.to.heading);
+    s.rig.cancelCinematic();
+    s.rig.snapTo(def.to.x, groundY(def.to.x, def.to.z), def.to.z);
+    s.dayNight.setTime(Math.min(23.9, s.dayNight.hour + def.hours));
+    await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.4 });
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+  }
+
+  // --- Market and cider house -----------------------------------------------------------
+
+  private async visitMarket(bar: BarDef): Promise<void> {
+    const s = this.s;
+    const hour = s.dayNight.hour;
+    if (hour < 8 || hour > 14) {
+      toast(s.ui, 'The stalls are packing up. Mornings are best for the market.');
+      return;
+    }
+    this.banter.interrupt();
+    this.bubbles.clear();
+    this.state.set('scene');
+    const pick = await choose(
+      s.ui,
+      bar.name,
+      'Annette is already talking to a stallholder. What shall we try?',
+      bar.menu.map((id) => ({ label: foodById(id)!.name, value: id })),
+      this.reducedMotion,
+    );
+    const food = foodById(pick)!;
+    const ctx = this.sceneContext();
+    const dish = makeDish(food);
+    dish.group.position.set(88.5, PROMENADE_Y + 0.92, 13.6);
+    s.scene.add(dish.group);
+    await s.rig.glideTo({ position: { x: 88.4, y: PROMENADE_Y + 2.7, z: 11.1 }, target: { x: 88.5, y: PROMENADE_Y + 1, z: 13.6 } }, this.reducedMotion ? 0.2 : 0.9);
+    await ctx.wait(ctx.line('annette', food.reactions.annette) * 0.9);
+    await ctx.wait(ctx.line('huw', food.reactions.huw) * 0.9);
+    if (!this.memories.has('visited:market')) this.remember('visited:market', 'Morning at the Bretxa market', 'Mercado de la Bretxa');
+    this.tasteFoods([food.id]);
+    dish.dispose();
+    await s.rig.returnToFollow();
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+  }
+
+  private async visitCiderHouse(bar: BarDef): Promise<void> {
+    const s = this.s;
+    const hour = s.dayNight.hour;
+    if (hour < 17 || hour > 23.5) {
+      toast(s.ui, 'Cider houses open in the evening. Come back after five.');
+      return;
+    }
+    this.banter.interrupt();
+    this.bubbles.clear();
+    this.state.set('scene');
+    this.audio.setDucked(true);
+    await gsap.to(this.fade, { opacity: 1, duration: this.reducedMotion ? 0.05 : 0.5 });
+    toast(s.ui, 'A taxi winds up into the hills. Ask the locals: the most remote one is the best.');
+    await new Promise((r) => window.setTimeout(r, this.reducedMotion ? 300 : 1400));
+    // Lift the curtain so the mini-game (which sits under the fade layer) is visible.
+    await gsap.to(this.fade, { opacity: 0.55, duration: this.reducedMotion ? 0.05 : 0.3 });
+    this.state.set('minigame');
+    const result = await playTxotx(s.ui, {
+      relaxed: s.settings.current.relaxedTiming,
+      oneButton: s.settings.current.oneButton,
+      reducedMotion: this.reducedMotion,
+      sfx: (k) => this.audio.ui(k),
+    });
+    this.state.set('scene');
+    const names = Object.fromEntries(crewData.map((c) => [c.id, c.name])) as Record<CrewId, string>;
+    const courses = bar.menu.map((id) => foodById(id)!).filter(Boolean);
+    await showFeast(s.ui, bar.name, courses, names, this.reducedMotion);
+    this.remember('played:txotx', 'Shouted “Txotx!” at a cider house in the hills', bar.name);
+    if (result.splashes > 1 && !this.memories.has('splashed:cider')) this.remember('splashed:cider', 'Cider all over the floor (and Huw’s shoes)', bar.name);
+    this.tasteFoods(courses.map((f) => f.id));
+    s.dayNight.setTime(Math.min(23.9, s.dayNight.hour + 3));
+    const back = { x: bar.door.x, z: bar.door.z + 1.6 };
+    s.crew.teleport(back.x, back.z, 0);
+    s.rig.snapTo(back.x, groundY(back.x, back.z), back.z);
+    await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.6 });
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+  }
+
+  // --- Encounters and friendship moments -----------------------------------------------------
+
+  private checkEncounters(): void {
+    const s = this.s;
+    if (this.encounterBusy) return;
+    const lead = s.crew.leader.mover;
+    const hour = s.dayNight.hour;
+    for (const e of encounters) {
+      if (this.encountersDone.has(e.id)) continue;
+      if (Math.hypot(lead.x - e.position.x, lead.z - e.position.z) > e.radius) continue;
+      if (e.hours && (hour < e.hours[0] || hour > e.hours[1])) continue;
+      if (e.weather === 'after-rain' && !s.weather.afterRain(s.dayNight.day, hour)) continue;
+      if (e.weather === 'dry' && s.weather.raining) continue;
+      void this.playEncounter(e);
+      return;
+    }
+  }
+
+  private resolveSpeaker(speaker: string, subject?: CrewId): CrewId {
+    const ids = this.s.crew.members.map((m) => m.def.id);
+    if (speaker === 'leader') return this.s.crew.leader.def.id;
+    if (speaker === 'subject') return subject ?? this.s.crew.leader.def.id;
+    if (speaker === 'any' || speaker === 'other') return ids.find((id) => id !== this.s.crew.leader.def.id) ?? ids[0];
+    return speaker as CrewId;
+  }
+
+  private async playEncounter(e: EncounterDef): Promise<void> {
+    const s = this.s;
+    this.encounterBusy = true;
+    this.encountersDone.add(e.id);
+    this.banter.interrupt();
+    const subject = e.subject ? s.crew.byId(e.subject) : undefined;
+    if (e.kind === 'dog' && subject) s.npcs.dogTarget = subject.renderPos;
+    if (e.kind === 'musician') this.audio.playTune();
+    if (e.kind === 'gull') s.npcs.swoop(s.crew.leader.renderPos.clone());
+    if ((e.kind === 'carousel' || e.kind === 'surfer') && subject) {
+      subject.character.hop(0.5);
+      subject.character.cheering = 1.5;
+    }
+    if (subject && subject !== s.crew.leader) subject.brain.startInvestigating(e.kind === 'dog' ? s.npcs.dog.position : e.position);
+    const ctx = this.sceneContext();
+    for (const [speaker, text] of e.beats) {
+      const seconds = ctx.line(this.resolveSpeaker(speaker, e.subject), text);
+      await new Promise((r) => window.setTimeout(r, seconds * 900));
+      if (this.state.name !== 'exploring') break;
+    }
+    s.npcs.dogTarget = null;
+    this.remember(e.memory.key, e.memory.summary);
+    this.vibe.add('funny');
+    this.encounterBusy = false;
+    void this.autosave();
+  }
+
+  private availableFriendship(): FriendshipDef | null {
+    const s = this.s;
+    const hour = s.dayNight.hour;
+    const ateToday = this.foodsTried.some((f) => f.day === s.dayNight.day);
+    for (const f of friendships) {
+      if (this.friendshipsDone.has(f.id)) continue;
+      const w = f.when;
+      if (w.raining && !s.weather.raining) continue;
+      if (w.areas && (!this.currentArea || !w.areas.includes(this.currentArea as never))) continue;
+      if (w.hours && (hour < w.hours[0] || hour > w.hours[1])) continue;
+      if (w.seated !== undefined && w.seated !== s.crew.seated) continue;
+      if (w.afterMeal && !ateToday) continue;
+      return f;
+    }
+    return null;
+  }
+
+  private async playFriendship(f: FriendshipDef): Promise<void> {
+    const s = this.s;
+    if (this.state.name !== 'exploring') return;
+    this.friendship = null;
+    this.friendshipsDone.add(f.id);
+    this.banter.interrupt();
+    this.bubbles.clear();
+    this.state.set('cinematic');
+    const [a, b] = f.pair.map((id) => s.crew.byId(id)!);
+    // The pair turn to each other; the camera finds them.
+    const mid = a.renderPos.clone().add(b.renderPos).multiplyScalar(0.5);
+    if (!s.crew.seated) {
+      a.mover.heading = Math.atan2(b.mover.x - a.mover.x, b.mover.z - a.mover.z);
+      b.mover.heading = Math.atan2(a.mover.x - b.mover.x, a.mover.z - b.mover.z);
+    }
+    const yaw = s.rig.yaw;
+    await s.rig.glideTo(
+      {
+        position: { x: mid.x + Math.sin(yaw) * 5.2, y: mid.y + 3.1, z: mid.z + Math.cos(yaw) * 5.2 },
+        target: { x: mid.x, y: mid.y + 1.7, z: mid.z },
+      },
+      this.reducedMotion ? 0.2 : 1.1,
+    );
+    const ctx = this.sceneContext();
+    for (const [speaker, text] of f.beats) await ctx.wait(ctx.line(speaker, text) * 0.95);
+    s.renderer.setTiltShift(0.35);
+    void this.keepPhoto(s.renderer.snapshot(), f.title);
+    s.renderer.setTiltShift(1);
+    this.remember(f.memory.key, f.memory.summary);
+    this.vibe.add('scene');
+    await s.rig.returnToFollow();
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+  }
+
+  // --- Journal ----------------------------------------------------------------------------
+
+  private async journalFromMenu(): Promise<void> {
+    const menu = this.pause;
+    this.pause = null;
+    await menu?.close();
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    await this.openJournal('sights');
+  }
+
+  private async openJournal(tab: 'sights' | 'dex'): Promise<void> {
+    const s = this.s;
+    if (this.state.name !== 'exploring') return;
+    this.state.set('scene');
+    const discovered = new Map<string, { day: number; photo: string | null }>();
+    for (const id of this.discovered) {
+      const mem = this.memories.all().find((m) => m.key === `discovered:${id}`);
+      const loc = locations.find((l) => l.id === id);
+      const photo = this.photos.find((p) => p.title === loc?.name);
+      discovered.set(id, { day: mem?.day ?? 1, photo: photo ? (this.photoUrls.get(photo.id) ?? null) : null });
+    }
+    const tried = new Map<string, number>();
+    for (const f of this.foodsTried) if (!tried.has(f.id)) tried.set(f.id, f.day);
+    const result = await showJournal(
+      s.ui,
+      {
+        locations,
+        discovered,
+        captions: this.captions,
+        foods: allFoods,
+        tried,
+        names: Object.fromEntries(crewData.map((c) => [c.id, c.name])) as Record<CrewId, string>,
+        favourites: this.favourites,
+      },
+      tab,
+      this.reducedMotion,
+    );
+    this.captions = result.captions;
+    this.favourites = result.favourites;
+    this.state.set('exploring');
+    s.renderer.canvas.focus({ preventScroll: true });
+    void this.autosave();
+    if (result.replay) {
+      const loc = locations.find((l) => l.id === result.replay);
+      if (loc) await this.discover(loc);
+    }
   }
 
   // --- Ending the day -------------------------------------------------------------------
@@ -1278,13 +1619,21 @@ async function boot(): Promise<void> {
 
   const barDressing = createBars();
   scene.add(barDressing.group);
+  const landmarks = createLandmarks();
+  scene.add(landmarks.group);
+  const npcs = createNpcs();
+  scene.add(npcs.group);
+  const weather = new Weather();
+  scene.add(weather.group);
+  const crowds = new Crowds();
+  scene.add(crowds.group);
 
   await progress(0.72, 'Waking the crew');
   const spawn = spawnPoint();
   const crew = new Crew(scene, world, spawn, Math.PI);
 
   const input = new Input(renderer.canvas);
-  game = new Game({ ui, scene, renderer, rig, input, world, scenery, interactables, crew, dayNight, settings, bars: barDressing });
+  game = new Game({ ui, scene, renderer, rig, input, world, scenery, interactables, crew, dayNight, settings, bars: barDressing, landmarks, npcs, weather, crowds });
 
   await progress(0.85, 'Warming up the shaders');
   dayNight.apply();

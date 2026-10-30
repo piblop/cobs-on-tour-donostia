@@ -26,7 +26,17 @@ export interface CameraShot {
   target: Vec3;
 }
 
-export type AreaId = 'la-concha' | 'alderdi-eder' | 'parte-vieja' | 'plaza';
+export type AreaId =
+  | 'la-concha'
+  | 'alderdi-eder'
+  | 'parte-vieja'
+  | 'plaza'
+  | 'peine'
+  | 'igueldo'
+  | 'urgull'
+  | 'santa-clara'
+  | 'miramar'
+  | 'gros';
 
 export interface Area {
   id: AreaId;
@@ -98,7 +108,12 @@ export type FoodModel =
   | 'txuleta'
   | 'peppers'
   | 'anchovy'
-  | 'drink';
+  | 'drink'
+  | 'chorizo'
+  | 'omelette'
+  | 'cod'
+  | 'cheese'
+  | 'pickles';
 
 export interface FoodDef {
   id: string;
@@ -128,7 +143,7 @@ export interface BarDef {
   door: Vec2;
   facing: number;
   awning: string;
-  activity: 'crawl' | 'meal';
+  activity: 'crawl' | 'meal' | 'market' | 'cider';
   menu: string[];
   actionLabel: string;
 }

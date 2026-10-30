@@ -73,7 +73,8 @@
   border: 2px solid var(--ink);
   box-shadow: var(--shadow);
   font-weight: 600;
-  z-index: 30;
+  /* Above the fade curtain, so notices show during transitions too. */
+  z-index: 45;
 }
 
 .toast.warn {
@@ -89,7 +90,7 @@
   place-items: center;
   padding: 16px;
   background: rgba(58, 44, 37, 0.28);
-  z-index: 25;
+  z-index: 42;
 }
 
 .ticket {
@@ -409,7 +410,8 @@
   place-items: center;
   padding: 16px;
   background: rgba(58, 44, 37, 0.35);
-  z-index: 28;
+  /* Above the fade curtain: mini-games can play while the world is dimmed. */
+  z-index: 42;
 }
 
 .mg {
@@ -764,4 +766,218 @@
   margin: 0.6rem 0 0;
   padding-left: 1.3rem;
   font-weight: 600;
+}
+
+/* --- Journal: sights and Pintxo-dex -------------------------------------------------- */
+.journal {
+  width: min(980px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 1.2rem 1.4rem;
+}
+
+.journal-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.2rem;
+}
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.tab {
+  appearance: none;
+  padding: 0.45rem 1.1rem;
+  min-height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 999px 999px 8px 8px;
+  background: #fffaf0;
+  color: var(--ink);
+  font: 700 0.95rem var(--body);
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.journal-count {
+  margin: 0 0 0.6rem;
+  text-align: center;
+  color: var(--ink-soft);
+  font-family: var(--hand);
+}
+
+.journal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.8rem;
+}
+
+.jcard {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  padding: 0.55rem 0.55rem 0.7rem;
+  background: #fffdf8;
+  box-shadow: 0 3px 10px rgba(60, 40, 25, 0.15);
+  border-radius: 4px;
+}
+
+.jcard:nth-child(odd) {
+  transform: rotate(-0.6deg);
+}
+
+.jcard:nth-child(even) {
+  transform: rotate(0.5deg);
+}
+
+.jcard.locked {
+  opacity: 0.6;
+  background: #f3ead8;
+}
+
+.jphoto {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: linear-gradient(#cfe3ea 55%, #eadfcb 55%);
+}
+
+.jcard.locked .jphoto {
+  background: repeating-linear-gradient(45deg, #e6dcc8, #e6dcc8 8px, #efe6d4 8px, #efe6d4 16px);
+}
+
+.jday {
+  font-size: 0.78rem;
+  color: #2f7f86;
+  font-weight: 700;
+}
+
+.jfact {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.jcaption {
+  padding: 0.4rem 0.5rem;
+  border: 2px solid #d9c9ab;
+  border-radius: 6px;
+  background: #fffaf0;
+  font: 0.95rem var(--hand);
+  color: var(--ink);
+}
+
+.jreacts {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.8rem;
+}
+
+.fav {
+  appearance: none;
+  justify-self: start;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fffaf0;
+  color: var(--ink);
+  font: 700 0.8rem var(--body);
+  cursor: pointer;
+}
+
+.fav[aria-pressed='true'] {
+  background: #f2c14e;
+}
+
+/* --- Cider-house feast card ------------------------------------------------------------ */
+.feast {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 1.3rem 1.5rem;
+  border: 2px dashed #c9a27a;
+}
+
+.feast-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feast-course {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.4rem;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.feast-thumb {
+  flex: none;
+  width: 96px;
+  height: 72px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.feast-react {
+  margin: 0.15rem 0 0;
+  font-family: var(--hand);
+  font-size: 0.95rem;
+}
+
+/* --- Txotx! ----------------------------------------------------------------------------- */
+.tx-stage {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.tx-scene {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: linear-gradient(#5b3a28, #7a5238);
+}
+
+.tx-glass {
+  position: absolute;
+  bottom: 6%;
+  width: 7%;
+  aspect-ratio: 1 / 1.6;
+  margin-left: -3.5%;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.tx-fill {
+  display: block;
+  width: 100%;
+  height: 0;
+  background: #e8cf7a;
+}
+
+/* The fade curtain lives in the UI layer but must never catch clicks. */
+#ui > .fade {
+  pointer-events: none;
 }

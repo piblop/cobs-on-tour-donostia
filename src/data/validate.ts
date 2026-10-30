@@ -17,7 +17,7 @@ export interface ContentIssue {
 }
 
 /** Generous world rectangle every authored coordinate must sit inside. */
-export const WORLD_BOUNDS = { minX: -130, maxX: 130, minZ: -110, maxZ: 60 } as const;
+export const WORLD_BOUNDS = { minX: -170, maxX: 180, minZ: -110, maxZ: 90 } as const;
 
 function inWorld(x: number, z: number): boolean {
   return (

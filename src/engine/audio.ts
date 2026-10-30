@@ -81,6 +81,7 @@ export class AudioEngine {
   private settings: Settings | null = null;
   private suspended = false;
   private ducked = false;
+  private rainGain: GainNode | null = null;
   private echoIn!: GainNode;
   private sources: AudioScheduledSourceNode[] = [];
 
@@ -200,6 +201,14 @@ export class AudioEngine {
       this.padVoices.push(osc);
       this.sources.push(osc);
     }
+
+    // Rain: bright noise, faded in by setRain().
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = 0;
+    const rainHp = ctx.createBiquadFilter();
+    rainHp.type = 'highpass';
+    rainHp.frequency.value = 2200;
+    this.loop(this.white).connect(rainHp).connect(this.rainGain).connect(this.ambience);
 
     // One shared echo for the plucks, so notes never leave nodes behind.
     this.echoIn = ctx.createGain();
@@ -392,6 +401,19 @@ export class AudioEngine {
     src.connect(f).connect(g).connect(this.sfx);
     src.start(now, Math.random() * 1.5);
     src.stop(now + 0.2);
+  }
+
+  setRain(intensity: number): void {
+    if (!this.ctx || !this.rainGain) return;
+    this.rainGain.gain.setTargetAtTime(intensity * 0.09, this.ctx.currentTime, 0.8);
+  }
+
+  /** A street guitarist's little tune: an original arpeggio in D. */
+  playTune(): void {
+    if (!this.ctx || this.suspended) return;
+    const now = this.ctx.currentTime + 0.1;
+    const notes = [293.66, 369.99, 440, 587.33, 440, 369.99, 329.63, 440, 493.88, 587.33, 493.88, 440, 369.99, 293.66];
+    notes.forEach((f, i) => this.pluck(f, 0.07, now + i * 0.32));
   }
 
   /** Short UI feedback. */

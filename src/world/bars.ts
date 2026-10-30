@@ -65,6 +65,8 @@ export function createBars(): BarDressing {
   const doorFrame = mat(new THREE.MeshLambertMaterial({ color: '#5b3a28' }));
 
   for (const bar of bars) {
+    // The market has its own stalls and the cider house is up in the hills (the taxi rank has a sign).
+    if (bar.activity === 'market' || bar.activity === 'cider') continue;
     const front = new THREE.Group();
     // Local +Z points out of the facade, toward the square.
     front.position.set(bar.door.x - Math.sin(bar.facing) * 0.62, PROMENADE_Y, bar.door.z - Math.cos(bar.facing) * 0.62);
