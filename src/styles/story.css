@@ -700,3 +700,68 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* --- Mini-game shell: scrolling body, sticky footer, thumbnails ------------------- */
+.mg {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mg-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.2rem;
+}
+
+.mg-foot {
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+  border-top: 2px dashed #e0d2b8;
+}
+
+.mg-foot .mg-actions {
+  margin: 0.2rem 0;
+  align-items: center;
+}
+
+.mg-thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  background: #fbf3e3;
+}
+
+.mg-plate {
+  overflow: hidden;
+  background: #fbfaf6;
+}
+
+.mg-plate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mg-level-safe {
+  display: grid;
+  place-items: center;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #1f5c61;
+}
+
+.plan-legend {
+  margin: 0.6rem 0 0;
+  padding-left: 1.3rem;
+  font-weight: 600;
+}
