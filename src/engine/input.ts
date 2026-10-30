@@ -1,5 +1,5 @@
 /**
- * Keyboard, mouse and gamepad merged into intents. Edge-triggered actions are
+ * Keyboard, mouse, gamepad and touch merged into intents. Edge-triggered actions are
  * queued and consumed once, so a press is never handled twice or lost.
  */
 
@@ -56,8 +56,10 @@ export class Input {
   private dragging = false;
   private lastPointerX = 0;
   private padPrev = new Map<number, boolean>();
+  /** On-screen joystick vector from TouchControls, in the same screen space as move(). */
+  private stick = { x: 0, z: 0 };
   /** Last device used, so prompts can show matching hints. */
-  device: 'keyboard' | 'gamepad' = 'keyboard';
+  device: 'keyboard' | 'gamepad' | 'touch' = 'keyboard';
 
   constructor(private canvas: HTMLElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -123,10 +125,34 @@ export class Input {
     this.dragging = false;
   };
 
+  // --- Touch: TouchControls feeds these ----------------------------------------
+
+  setStick(x: number, z: number): void {
+    this.stick.x = x;
+    this.stick.z = z;
+  }
+
+  /** Queue an action as if its key had been pressed. */
+  press(action: Action): void {
+    this.queue.push(action);
+  }
+
+  /** Camera yaw from a touch drag, in radians. */
+  addLook(radians: number): void {
+    this.dragYaw += radians;
+  }
+
+  /** Zoom from a pinch, in wheel-pixel units (positive = zoom out). */
+  addZoom(pixels: number): void {
+    this.wheel += pixels;
+  }
+
   /** Drop held keys when focus leaves, so nobody keeps walking on their own. */
   clear = (): void => {
     this.held.clear();
     this.dragging = false;
+    this.stick.x = 0;
+    this.stick.z = 0;
   };
 
   private gamepad(): Gamepad | null {
@@ -185,6 +211,12 @@ export class Input {
         z = pz;
       }
       if (pad.buttons[7]?.value > 0.5 || pad.buttons[5]?.pressed) brisk = true;
+    }
+    if (this.stick.x !== 0 || this.stick.z !== 0) {
+      x = this.stick.x;
+      z = this.stick.z;
+      // Pushing the stick right to its rim breaks into a brisk walk.
+      if (Math.hypot(x, z) > 0.95) brisk = true;
     }
     return { x, z, brisk };
   }

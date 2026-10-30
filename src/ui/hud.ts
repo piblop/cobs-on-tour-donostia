@@ -26,6 +26,8 @@ export class Hud {
   private lastClock = '';
   private goals: HTMLElement;
   reducedMotion = false;
+  /** Tapping the floating prompt on a touch screen. */
+  onPromptTap: (() => void) | null = null;
 
   constructor(root: HTMLElement) {
     this.bannerTitle = h('h2');
@@ -34,6 +36,12 @@ export class Hud {
     this.promptKey = h('span', { class: 'key', text: 'E' });
     this.promptLabel = h('span');
     this.prompt = h('div', { class: 'prompt', attrs: { 'aria-hidden': 'true' } }, this.promptKey, this.promptLabel);
+    // On touch screens the prompt itself is a button (CSS turns on pointer events in touch mode).
+    this.prompt.addEventListener('pointerdown', (e) => {
+      if (!this.promptVisible) return;
+      e.preventDefault();
+      this.onPromptTap?.();
+    });
     this.chipCount = h('span', { text: '0' });
     const chip = h(
       'div',
@@ -112,7 +120,7 @@ export class Hud {
     this.prompt.style.transform = `translate(${x}px, ${y}px)`;
     if (!this.promptVisible) {
       this.promptVisible = true;
-      this.announce(`${label}. Press ${key}.`);
+      this.announce(key === '✋' ? `${label}. Tap to interact.` : `${label}. Press ${key}.`);
       gsap.to(this.prompt, { opacity: 1, duration: 0.18, overwrite: 'auto' });
     }
   }
@@ -184,9 +192,11 @@ export class Hud {
   }
 
   /** First-time controls hint that fades by itself once the player starts moving. */
-  showHint(device: 'keyboard' | 'gamepad'): void {
+  showHint(device: 'keyboard' | 'gamepad' | 'touch'): void {
     this.hint.replaceChildren();
-    if (device === 'gamepad') {
+    if (device === 'touch') {
+      this.hint.append('Drag on the left to stroll · tap ', h('kbd', { text: '✋' }), ' or the bubble to interact · pinch to zoom');
+    } else if (device === 'gamepad') {
       this.hint.append('Left stick to stroll · ', h('kbd', { text: 'A' }), ' to interact · right stick to look around');
     } else {
       this.hint.append(

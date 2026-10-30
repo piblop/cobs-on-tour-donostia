@@ -62,6 +62,7 @@ import { showJournal } from './ui/journal.ts';
 import { foodThumbnail, makeDish } from './world/food3d.ts';
 import { playEnding, showBook, type EndingSlide } from './ui/ending.ts';
 import { trip as tripTuning } from './data/tuning.ts';
+import { TouchControls } from './ui/touch.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -176,6 +177,8 @@ class Game {
     this.hud = new Hud(s.ui);
     this.hud.setVisible(false);
     this.hud.setCount(0, locations.length);
+    this.hud.onPromptTap = () => s.input.press('interact');
+    new TouchControls(s.ui, s.renderer.canvas, s.input);
     this.bubbles = new Bubbles(s.ui);
     this.fade = h('div', { class: 'fade', attrs: { 'aria-hidden': 'true' } });
     // Inside the UI layer, so story overlays and toasts can sit above the curtain.
@@ -513,7 +516,7 @@ class Game {
       this.hud.setPrompt(null, null, '');
       return;
     }
-    const key = s.input.device === 'gamepad' ? 'A' : 'E';
+    const key = s.input.device === 'gamepad' ? 'A' : s.input.device === 'touch' ? '✋' : 'E';
     const lead = s.crew.leader;
     const overLeader = (label: string) => {
       this.anchor.copy(lead.renderPos).setY(lead.renderPos.y + 3.6).project(s.rig.camera);

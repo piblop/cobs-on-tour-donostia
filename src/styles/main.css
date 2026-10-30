@@ -954,3 +954,191 @@ kbd {
     min-width: 0;
   }
 }
+
+/* --- Touch play -------------------------------------------------------------------- */
+#stage canvas {
+  touch-action: none;
+}
+
+.touch-ui {
+  display: none;
+}
+
+body.touch-mode {
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.touch-mode[data-state='exploring'] .touch-ui {
+  display: block;
+}
+
+.stick-base {
+  position: fixed;
+  left: -60px;
+  top: -60px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(251, 245, 233, 0.28);
+  border: 3px solid rgba(251, 245, 233, 0.8);
+  box-shadow: 0 2px 10px rgba(60, 40, 25, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.stick-base.on {
+  opacity: 1;
+}
+
+.stick-knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 250, 240, 0.96);
+  border: 3px solid var(--ink);
+  box-shadow: 0 3px 0 rgba(58, 44, 37, 0.85);
+}
+
+.touch-btn {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow: 0 4px 0 rgba(58, 44, 37, 0.85);
+  color: var(--ink);
+  font: 800 1.35rem/1 var(--body);
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(58, 44, 37, 0.85);
+}
+
+.touch-act {
+  right: calc(22px + env(safe-area-inset-right));
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  width: 78px;
+  height: 78px;
+  font-size: 2rem;
+  background: #ffe2a8;
+}
+
+.touch-switch {
+  right: calc(114px + env(safe-area-inset-right));
+  bottom: calc(26px + env(safe-area-inset-bottom));
+}
+
+.touch-journal {
+  right: calc(32px + env(safe-area-inset-right));
+  bottom: calc(118px + env(safe-area-inset-bottom));
+}
+
+.touch-pause {
+  top: calc(74px + env(safe-area-inset-top));
+  right: calc(14px + env(safe-area-inset-right));
+  width: 46px;
+  height: 46px;
+  font-size: 1rem;
+  letter-spacing: -0.1em;
+}
+
+/* The HUD reshuffles around the buttons: keyboard hints go, the crew stack on the right. */
+body.touch-mode .pause-hint,
+body.touch-mode .crew-tab {
+  display: none;
+}
+
+body.touch-mode .prompt {
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+body.touch-mode .collection-chip {
+  top: calc(14px + env(safe-area-inset-top));
+  bottom: auto;
+  right: calc(12px + env(safe-area-inset-right));
+}
+
+body.touch-mode .crew-row {
+  top: calc(132px + env(safe-area-inset-top));
+  bottom: auto;
+  right: calc(14px + env(safe-area-inset-right));
+  flex-direction: column;
+  align-items: center;
+}
+
+body.touch-mode .crew-chip {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+
+body.touch-mode .crew-chip.leader {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+body.touch-mode .status {
+  top: calc(14px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  max-width: calc(100vw - 130px);
+  font-size: 0.85rem;
+}
+
+body.touch-mode .hint {
+  left: calc(12px + env(safe-area-inset-left));
+  bottom: calc(118px + env(safe-area-inset-bottom));
+  max-width: calc(100vw - 120px);
+  font-size: 0.85rem;
+}
+
+/* Portrait phones: the area banner drops below the status card. */
+@media (max-width: 560px) {
+  body.touch-mode .area-banner {
+    top: auto;
+    bottom: calc(200px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* Landscape phones: everything a little smaller so the bay still fits. */
+@media (max-height: 500px) {
+  .area-banner {
+    top: 10px;
+    padding: 0.35rem 1.1rem 0.45rem;
+  }
+  .area-banner h2 {
+    font-size: 1.25rem;
+  }
+  .area-banner p {
+    font-size: 0.78rem;
+  }
+  body.touch-mode .status {
+    font-size: 0.78rem;
+    max-width: 240px;
+  }
+  body.touch-mode .crew-row {
+    top: auto;
+    bottom: calc(26px + env(safe-area-inset-bottom));
+    right: calc(200px + env(safe-area-inset-right));
+    flex-direction: row;
+  }
+  body.touch-mode .hint {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 460px);
+    min-width: 200px;
+  }
+}

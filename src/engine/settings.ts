@@ -84,6 +84,12 @@ export class SettingsStore {
       raw = null;
     }
     this.value = sanitiseSettings(raw);
+    // First run on a phone or tablet: start light, the player can raise it in Settings.
+    try {
+      if (raw === null && matchMedia('(pointer: coarse)').matches) this.value.quality = 'low';
+    } catch {
+      // matchMedia unavailable: keep the default.
+    }
     try {
       const mq = matchMedia('(prefers-reduced-motion: reduce)');
       this.systemReduced = mq.matches;

@@ -192,3 +192,37 @@ test('the journal opens with J and shows sights and the Pintxo-dex', async ({ pa
   await page.getByRole('button', { name: 'Close journal' }).click();
   await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
 });
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('touch controls: joystick walks, buttons work', async ({ page }) => {
+    const touch = (type: string, id: number, x: number, y: number) =>
+      page.evaluate(
+        ([type, id, x, y]) => {
+          const target = type === 'pointerdown' ? document.getElementById('world')! : window;
+          target.dispatchEvent(new PointerEvent(type as string, { pointerId: id as number, pointerType: 'touch', clientX: x as number, clientY: y as number, bubbles: true, cancelable: true }));
+        },
+        [type, id, x, y] as const,
+      );
+    await page.goto('./');
+    await expect.poll(() => state(page), { timeout: 60_000 }).toBe('title');
+    await page.getByRole('button', { name: 'Start Trip' }).tap();
+    await page.getByRole('button', { name: 'Step outside' }).tap();
+    await expect.poll(() => state(page), { timeout: 20_000 }).toBe('exploring');
+    await expect(page.locator('body')).toHaveClass(/touch-mode/);
+    await expect(page.getByRole('button', { name: 'Interact' })).toBeVisible();
+    await expect(page.locator('.hint')).toContainText('Drag on the left');
+
+    // Thumb down on the left half and push: the stick appears, then lets go cleanly.
+    await touch('pointerdown', 1, 70, 720);
+    await expect(page.locator('.stick-base')).toHaveClass(/on/);
+    for (let i = 1; i <= 6; i++) await touch('pointermove', 1, 70 + i * 10, 720);
+    await page.waitForTimeout(800);
+    await touch('pointerup', 1, 130, 720);
+    await expect(page.locator('.stick-base')).not.toHaveClass(/on/);
+
+    await page.getByRole('button', { name: 'Journal' }).dispatchEvent('pointerdown');
+    await expect(page.getByRole('heading', { name: 'Trip journal' })).toBeVisible();
+  });
+});
