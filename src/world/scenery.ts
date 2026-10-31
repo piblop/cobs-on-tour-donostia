@@ -286,6 +286,9 @@ export function createScenery(): Scenery {
           }
           return v;
         }
+        float fbm3(vec2 p) {
+          return 0.5 * noise(p) + 0.25 * noise(p * 2.03 + vec2(1.7, 9.2)) + 0.125 * noise(p * 4.12 + vec2(5.3, 2.8)) + 0.0625;
+        }
 
         void main() {
           vec3 d = normalize(vDir);
@@ -297,7 +300,10 @@ export function createScenery(): Scenery {
           // Warm band hugging the horizon, strongest on the sun's side.
           float band = (1.0 - smoothstep(0.0, 0.28, abs(h))) * (0.35 + 0.65 * pow(sd, 3.0));
           col = mix(col, glow, band * 0.55);
-          // Halo and disc.
+          // A thin bright haze right on the horizon line, where the sea meets the sky.
+          col = mix(col, horizon * 1.06 + glow * 0.04, (1.0 - smoothstep(0.0, 0.05, abs(h))) * 0.45);
+          // Broad forward scatter, then the halo and disc.
+          col += glow * pow(sd, 6.0) * 0.16 * (1.0 - uNight);
           col += glow * pow(sd, 24.0) * 0.45;
           col = mix(col, discColor, smoothstep(0.9975, 0.999, sd));
           // Stars come out as the night deepens.
@@ -310,13 +316,25 @@ export function createScenery(): Scenery {
 
           if (h > 0.0) {
             // Project the dome onto a flat cloud layer so clouds shrink toward the horizon.
-            vec2 uv = d.xz / (h + 0.18) * 1.15 + vec2(uTime * 0.012, uTime * 0.005);
+            vec2 base = d.xz / (h + 0.18);
+            // High cirrus first: thin streaks combed out by the wind, drifting slowly.
+            vec2 cuv = base * 0.7 + vec2(uTime * 0.004, -uTime * 0.002);
+            float ci = fbm3(vec2(cuv.x * 0.45 + cuv.y * 0.2, cuv.y * 3.2 - cuv.x * 0.6));
+            float streak = smoothstep(0.56, 0.82, ci) * smoothstep(0.05, 0.32, h) * (1.0 - uNight * 0.7);
+            col = mix(col, cloudLit + glow * pow(sd, 4.0) * 0.25, streak * 0.38);
+
+            vec2 uv = base * 1.15 + vec2(uTime * 0.012, uTime * 0.005);
             float c = fbm(uv);
             float cover = smoothstep(0.52, 0.76, c) * smoothstep(0.02, 0.16, h);
-            // Thick cores are shaded lilac-peach, thin edges glow where the sun hits.
+            // Light the puffs from the sun's side: a sample nudged toward the sun
+            // tells us whether this point faces it (bright) or sits in its own shade.
+            vec2 towardSun = normalize(sunDir.xz + vec2(1e-4)) * 0.07;
+            float lit = clamp((c - fbm3(uv + towardSun)) * 7.0 + 0.55, 0.0, 1.0);
             float thick = smoothstep(0.6, 0.85, c);
-            vec3 cloud = mix(cloudLit, cloudShade, thick * 0.65);
+            vec3 cloud = mix(cloudShade, cloudLit, mix(1.0 - thick * 0.65, lit, 0.55));
+            // Thin edges glow where the sun shines through, with a silver rim near the disc.
             cloud += glow * pow(sd, 5.0) * (1.0 - thick) * 0.6;
+            cloud += discColor * pow(sd, 14.0) * (1.0 - smoothstep(0.52, 0.64, c)) * 0.7;
             col = mix(col, cloud, cover * 0.9);
           }
           gl_FragColor = vec4(col, 1.0);
@@ -374,14 +392,22 @@ export function createScenery(): Scenery {
       flatShading: true,
       emissive: '#1d6e78',
       emissiveIntensity: 0.1,
-      specular: '#ffe0b0',
-      shininess: 70,
+      specular: '#4a4036',
+      shininess: 40,
     }),
   );
   seaMat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = waterTime;
+    // The sea mirrors the live sky, so reflections follow the time of day.
+    shader.uniforms.uZenith = skyUniforms.zenith;
+    shader.uniforms.uMid = skyUniforms.mid;
+    shader.uniforms.uHorizon = skyUniforms.horizon;
+    shader.uniforms.uGlow = skyUniforms.glow;
+    shader.uniforms.uSunDir = skyUniforms.sunDir;
+    shader.uniforms.uDisc = skyUniforms.discColor;
+    shader.uniforms.uNight = skyUniforms.uNight;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWater;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWater;\nvarying float vCoast;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -391,16 +417,83 @@ export function createScenery(): Scenery {
         if (position.x > 44.0) coast = -9.8 - position.z;
         if (position.x > 107.0) coast = -31.0 - position.z;
         transformed.y += w * smoothstep(0.0, 10.0, coast) - 0.025;
-        vWater = position.xz;`,
+        vWater = position.xz;
+        vCoast = coast;`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec2 vWater;')
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform float uTime;
+        uniform vec3 uZenith;
+        uniform vec3 uMid;
+        uniform vec3 uHorizon;
+        uniform vec3 uGlow;
+        uniform vec3 uSunDir;
+        uniform vec3 uDisc;
+        uniform float uNight;
+        varying vec2 vWater;
+        varying float vCoast;
+        float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float wNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), u.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), u.x), u.y);
+        }
+        // Slope of a sum of crossing wave trains; gives the surface fine detail.
+        vec2 waveSlope(vec2 p, float t) {
+          p += 0.7 * sin(p.yx * 0.23 + t * 0.15);
+          vec2 g = vec2(0.0);
+          vec2 d;
+          d = vec2(0.8, 0.6);   g += d * cos(dot(p, d) * 1.9 + t * 1.3) * 0.14;
+          d = vec2(-0.5, 0.86); g += d * cos(dot(p, d) * 3.3 - t * 1.7) * 0.09;
+          d = vec2(0.2, -0.98); g += d * cos(dot(p, d) * 5.9 + t * 2.4) * 0.06;
+          d = vec2(0.96, -0.28); g += d * cos(dot(p, d) * 9.7 - t * 3.1) * 0.04;
+          d = vec2(-0.7, -0.71); g += d * cos(dot(p, d) * 15.3 + t * 3.9) * 0.025;
+          return g;
+        }`,
+      )
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        float ripple = sin(vWater.x * 2.2 + sin(vWater.y * 0.7) + uTime * 0.4)
-                     * sin(vWater.y * 3.1 - uTime * 0.3);
-        float glint = smoothstep(0.98, 1.0, ripple) * 0.045;
-        diffuseColor.rgb *= 0.97 + ripple * 0.035;
-        totalEmissiveRadiance += vec3(0.35, 0.7, 0.72) * glint;
+        vec2 wp = vWater;
+        float t = uTime;
+        float day = 1.0 - uNight;
+        vec2 slope = waveSlope(wp, t);
+        vec3 wn = normalize(vec3(-slope.x, 1.0, -slope.y));
+        vec3 toEye = normalize(cameraPosition - vec3(wp.x, 0.0, wp.y));
+        vec3 refl = reflect(-toEye, wn);
+        refl.y = abs(refl.y);
+
+        // Fresnel sky reflection: glassy at grazing angles, clear looking straight down.
+        float fres = 0.03 + 0.62 * pow(1.0 - max(dot(wn, toEye), 0.0), 4.0);
+        vec3 skyRef = mix(uHorizon, uMid, smoothstep(0.0, 0.22, refl.y));
+        skyRef = mix(skyRef, uZenith, smoothstep(0.2, 0.75, refl.y));
+        skyRef += uGlow * pow(max(dot(refl, uSunDir), 0.0), 8.0) * 0.12;
+        diffuseColor.rgb *= 1.0 - fres * 0.55;
+        totalEmissiveRadiance += skyRef * fres * 0.45;
+
+        // Sun glitter: a broad warm sheen plus tiny sparkles that dance on the ripples.
+        float sunDot = max(dot(refl, uSunDir), 0.0);
+        float sparkle = pow(sunDot, 600.0) * (0.6 + 0.8 * wHash(floor(wp * 7.0) + floor(t * 5.0)));
+        totalEmissiveRadiance += uDisc * (pow(sunDot, 140.0) * 0.14 + sparkle * 4.0) * (0.25 + 0.75 * day);
+
+        // Small whitecaps far out where the water is deep.
+        float caps = smoothstep(0.8, 0.9, wNoise(wp * 0.55 + vec2(t * 0.08, -t * 0.05))) * smoothstep(0.4, 0.7, wNoise(wp * 2.3 - t * 0.2))
+                   * smoothstep(0.85, 0.99, 0.5 + 0.5 * sin(dot(wp, vec2(0.8, 0.6)) * 1.9 + t * 1.3));
+        caps *= smoothstep(10.0, 24.0, vCoast);
+
+        // Rolling surf lines that run in toward the sand and break up as they go.
+        float near = 1.0 - smoothstep(0.0, 10.0, vCoast);
+        float crest = smoothstep(0.86, 0.98, 0.5 + 0.5 * sin(vCoast * 0.85 + t * 1.25 + wNoise(wp * 0.12) * 3.0));
+        crest *= smoothstep(0.35, 0.65, wNoise(wp * vec2(0.35, 0.9) + vec2(t * 0.1, 0.0)));
+        float surf = crest * near * smoothstep(0.0, 1.2, vCoast);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.97, 1.0, 0.98), clamp(surf * 0.8 + caps * 0.4, 0.0, 1.0));
+
+        // Dappled caustic light over the shallows.
+        vec2 cp = wp * 1.1;
+        float ca = abs(sin(cp.x * 1.7 + sin(cp.y * 1.3 + t * 0.9) * 1.4 + t * 0.6) + sin(cp.y * 1.9 + sin(cp.x * 1.1 - t * 0.8) * 1.3));
+        float caustic = pow(1.0 - min(ca, 1.0), 5.0) * (1.0 - smoothstep(0.3, 4.5, vCoast));
+        totalEmissiveRadiance += vec3(0.75, 1.0, 0.9) * caustic * 0.085 * day;
       `);
   };
   const sea = new THREE.Mesh(track(seaGeo), seaMat);
@@ -729,6 +822,62 @@ export function createScenery(): Scenery {
     });
   }
 
+  // --- Seagulls ---------------------------------------------------------------
+  // A loose flock wheeling over the bay: one instanced mesh, wings flapped by
+  // squashing each gull's height, with long glides between bursts.
+  const gullGeo = new THREE.BufferGeometry();
+  {
+    const P = [
+      // Left wing: shoulder, elbow, tip (an "M" silhouette).
+      0, 0, 0.22, 0, 0, -0.14, -0.42, 0.2, 0.02,
+      -0.42, 0.2, 0.02, 0, 0, -0.14, -0.45, 0.17, -0.16,
+      -0.42, 0.2, 0.02, -0.45, 0.17, -0.16, -1.0, -0.02, -0.2,
+      // Right wing.
+      0, 0, 0.22, 0.42, 0.2, 0.02, 0, 0, -0.14,
+      0.42, 0.2, 0.02, 0.45, 0.17, -0.16, 0, 0, -0.14,
+      0.42, 0.2, 0.02, 1.0, -0.02, -0.2, 0.45, 0.17, -0.16,
+      // Body and tail.
+      0, 0, 0.42, 0, -0.07, -0.3, 0, 0.04, -0.4,
+    ];
+    const C: number[] = [];
+    for (let i = 0; i < P.length / 3; i++) {
+      const tip = i >= 6 && i < 9 ? 1 : i >= 15 && i < 18 ? 1 : 0;
+      const g = tip ? 0.32 : 0.97;
+      C.push(g, g, tip ? g : 0.99);
+    }
+    gullGeo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    gullGeo.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+    gullGeo.computeVertexNormals();
+  }
+  const GULLS = 11;
+  const gullMesh = new THREE.InstancedMesh(
+    track(gullGeo),
+    track(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: '#ffffff', emissiveIntensity: 0.18 })),
+    GULLS,
+  );
+  gullMesh.frustumCulled = false;
+  group.add(gullMesh);
+  const gullRng = mulberry32(8812);
+  const loops = [
+    [-6, -34],
+    [22, -22],
+    [-34, -52],
+    [52, -26],
+  ];
+  const gulls = Array.from({ length: GULLS }, (_, i) => {
+    const [cx, cz] = loops[i % loops.length];
+    return {
+      cx: cx + (gullRng() - 0.5) * 10,
+      cz: cz + (gullRng() - 0.5) * 10,
+      r: 7 + gullRng() * 12,
+      y: 13 + gullRng() * 12,
+      speed: (0.12 + gullRng() * 0.1) * (gullRng() < 0.3 ? -1 : 1),
+      phase: gullRng() * Math.PI * 2,
+      size: 0.9 + gullRng() * 0.45,
+    };
+  });
+  const gullObj = new THREE.Object3D();
+
   return {
     group,
     sun,
@@ -743,6 +892,24 @@ export function createScenery(): Scenery {
         b.obj.position.y = b.baseY + Math.sin(time * 1.1 + b.phase) * 0.08;
         b.obj.rotation.z = Math.sin(time * 0.9 + b.phase) * 0.04;
         b.obj.rotation.x = Math.sin(time * 0.7 + b.phase * 1.3) * 0.03;
+      }
+      // Gulls roost at night.
+      gullMesh.visible = skyUniforms.uNight.value < 0.7;
+      if (gullMesh.visible) {
+        for (let i = 0; i < GULLS; i++) {
+          const g = gulls[i];
+          const a = g.phase + time * g.speed;
+          const dir = Math.sign(g.speed);
+          gullObj.position.set(g.cx + Math.cos(a) * g.r, g.y + Math.sin(time * 0.5 + g.phase) * 1.2, g.cz + Math.sin(a) * g.r);
+          // Face along the circle and bank into the turn.
+          gullObj.rotation.set(0, -a - (dir > 0 ? 0 : Math.PI), dir * 0.28, 'YXZ');
+          const gliding = Math.sin(time * 0.35 + g.phase * 3) > -0.2;
+          const flap = gliding ? 0.75 + Math.sin(time * 1.5 + g.phase) * 0.08 : Math.sin(time * 9 + g.phase * 5);
+          gullObj.scale.set(g.size, g.size * flap * 1.1, g.size);
+          gullObj.updateMatrix();
+          gullMesh.setMatrixAt(i, gullObj.matrix);
+        }
+        gullMesh.instanceMatrix.needsUpdate = true;
       }
 
     },
