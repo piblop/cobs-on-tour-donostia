@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { validateContent, formatIssues } from './data/validate.ts';
 import { areas, locations } from './data/locations.ts';
+import { bars } from './data/restaurants.ts';
 import { banter } from './data/banter.ts';
 import type { CrewId } from './data/types.ts';
 import { GameLoop } from './engine/loop.ts';
@@ -120,18 +121,46 @@ const TIPS = [
  * a stop with `via` borrows that travel link's arrival point and unlocks once
  * its sight has been discovered, so the ride itself always comes first.
  */
-const QUICK_STOPS: Array<{ area: string; at?: { x: number; z: number; heading: number }; via?: string; sight?: string; locked?: string }> = [
-  { area: 'igueldo', via: 'funicular-up', sight: 'igueldo-view', locked: 'Ride the funicular up first' },
-  { area: 'peine', at: { x: -80, z: -29, heading: Math.PI } },
-  { area: 'miramar', at: { x: -49, z: 6, heading: Math.PI } },
-  { area: 'santa-clara', via: 'boat-out', sight: 'santa-clara', locked: 'Take the little boat over first' },
-  { area: 'la-concha' },
-  { area: 'alderdi-eder', at: { x: 28, z: 4, heading: Math.PI } },
-  { area: 'parte-vieja', at: { x: 53.4, z: 3.5, heading: Math.PI / 2 } },
-  { area: 'plaza', at: { x: 78.5, z: 6, heading: Math.PI } },
-  { area: 'urgull', via: 'urgull-up', sight: 'urgull-castle', locked: 'Climb the path up first' },
-  { area: 'gros', at: { x: 125, z: -5, heading: Math.PI } },
-];
+/** Sights reached by a ride: quick travel lands where the ride arrives. */
+const RIDE_SIGHTS: Record<string, string> = { 'igueldo-view': 'funicular-up', 'urgull-castle': 'urgull-up', 'santa-clara': 'boat-out' };
+
+interface QuickTarget {
+  id: string;
+  name: string;
+  subtitle: string;
+  group: string;
+  x: number;
+  z: number;
+  heading: number;
+}
+
+/** Every sight and pintxos bar, each with a landing spot a couple of steps away, facing it. */
+function quickTargets(): QuickTarget[] {
+  const links = travelLinks();
+  const facing = (fx: number, fz: number, tx: number, tz: number) => Math.atan2(tx - fx, tz - fz);
+  const sights = locations.map((l): QuickTarget => {
+    const area = areas.find((a) => a.id === l.area)!;
+    const ride = RIDE_SIGHTS[l.id] ? links.find((k) => k.id === RIDE_SIGHTS[l.id])?.to : undefined;
+    const subtitle = area.name === l.name ? area.subtitle : area.name;
+    if (ride) return { id: l.id, name: l.name, subtitle, group: 'Sights', ...ride };
+    // Step back toward where the postcard camera stands, which is always open ground.
+    let dx = l.shot.position.x - l.position.x;
+    let dz = l.shot.position.z - l.position.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1) [dx, dz] = [0, 1];
+    else [dx, dz] = [dx / len, dz / len];
+    const step = Math.min(1.5, l.interactRadius - 0.5);
+    const x = l.position.x + dx * step;
+    const z = l.position.z + dz * step;
+    return { id: l.id, name: l.name, subtitle, group: 'Sights', x, z, heading: facing(x, z, l.position.x, l.position.z) };
+  });
+  const pintxos = bars.map((b): QuickTarget => {
+    const x = b.door.x + Math.sin(b.facing) * 1.3;
+    const z = b.door.z + Math.cos(b.facing) * 1.3;
+    return { id: b.id, name: b.name, subtitle: areaAt(b.door.x, b.door.z)?.name ?? 'Donostia', group: 'Pintxos bars', x, z, heading: facing(x, z, b.door.x, b.door.z) };
+  });
+  return [...sights, ...pintxos];
+}
 
 class Game {
   readonly state = new GameState();
@@ -915,26 +944,28 @@ class Game {
     this.state.set('scene');
     this.s.input.clear();
     this.audio.ui('open');
-    const links = travelLinks();
-    const stops = QUICK_STOPS.map((q) => {
-      const area = areas.find((a) => a.id === q.area)!;
-      const locked = q.sight && !this.discovered.has(q.sight) ? (q.locked ?? 'Not yet') : null;
-      return { id: q.area, name: area.name, subtitle: area.subtitle, locked, here: this.currentArea === q.area };
-    });
+    const targets = quickTargets();
+    const m = this.s.crew.leader.mover;
+    const stops = targets.map((t) => ({
+      id: t.id,
+      name: t.name,
+      subtitle: t.subtitle,
+      group: t.group,
+      locked: null,
+      here: Math.hypot(m.x - t.x, m.z - t.z) < 4,
+    }));
     const menu = showQuickTravel(this.s.ui, stops, this.reducedMotion);
     // Esc / B closes the card like "Stay here".
     this.advance = menu.cancel;
     const id = await menu.result;
     this.advance = null;
     this.audio.ui('close');
-    const stop = QUICK_STOPS.find((q) => q.area === id);
-    if (!stop) {
+    const p = targets.find((t) => t.id === id);
+    if (!p) {
       this.state.set('exploring');
       this.s.renderer.canvas.focus({ preventScroll: true });
       return;
     }
-    const via = stop.via ? links.find((l) => l.id === stop.via)?.to : undefined;
-    const p = stop.at ?? via ?? { ...spawnPoint(), heading: Math.PI };
     await this.hop(p.x, p.z, p.heading);
     void this.autosave();
   }

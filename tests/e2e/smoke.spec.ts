@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { SUBPATH } from '../../playwright.config.ts';
+import { locations } from '../../src/data/locations.ts';
+import { bars } from '../../src/data/restaurants.ts';
 
 const state = (page: Page) => page.evaluate(() => document.body.dataset.state);
 
@@ -228,21 +230,22 @@ test.describe('on a phone', () => {
   });
 });
 
-test('quick travel hops across town; hilltops wait for the real trip', async ({ page }) => {
+test('quick travel reaches every sight and pintxos bar', async ({ page }) => {
+  test.setTimeout(180_000);
   await startTrip(page);
-  await page.keyboard.press('KeyM');
   const card = page.getByRole('dialog', { name: 'Where to?' });
-  await expect(card).toBeVisible();
-  await expect(card.getByRole('button', { name: /Monte Igueldo/ })).toBeDisabled();
-  await expect(card.getByRole('button', { name: /Monte Igueldo/ })).toContainText('Ride the funicular up first');
-  await expect(card.getByRole('button', { name: /La Concha/ })).toContainText('You are here');
-  await card.getByRole('button', { name: /Gros & Zurriola/ }).click();
-  await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
-  await expect(page.locator('.area-banner')).toContainText('Gros & Zurriola', { timeout: 10_000 });
-  // Escape closes the card without moving.
+  const stops = [...locations.map((l) => ({ name: l.name, label: l.actionLabel, ride: ['igueldo-view', 'urgull-castle', 'santa-clara'].includes(l.id) })), ...bars.map((b) => ({ name: b.name, label: b.actionLabel, ride: false }))];
   await page.keyboard.press('KeyM');
-  await expect(card).toBeVisible();
+  await expect(card.locator('.qt-stop')).toHaveCount(stops.length);
+  await expect(card.getByRole('heading', { name: 'Pintxos bars' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(card).toBeHidden();
-  await expect.poll(() => state(page)).toBe('exploring');
+  for (const stop of stops) {
+    await expect.poll(() => state(page)).toBe('exploring');
+    await page.keyboard.press('KeyM');
+    await card.getByRole('button', { name: new RegExp(`^${stop.name}`) }).click();
+    await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
+    // Arriving next to the sight or bar brings up its prompt (rides land at the summit or jetty).
+    if (!stop.ride) await expect(page.locator('.prompt'), stop.name).toContainText(stop.label, { timeout: 5_000 });
+  }
 });

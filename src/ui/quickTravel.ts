@@ -5,6 +5,8 @@ export interface QuickStop {
   id: string;
   name: string;
   subtitle: string;
+  /** Section heading the stop is listed under, e.g. "Sights". */
+  group?: string;
   /** Why it is not available yet, or null when it is. */
   locked: string | null;
   here: boolean;
@@ -17,9 +19,8 @@ export interface QuickTravelMenu {
 }
 
 /**
- * The quick travel card: a short list of places around the bay. Hilltops and
- * the island unlock once the crew has made the trip there properly, so the
- * funicular, the climb and the boat are still experienced first.
+ * The quick travel card: every sight and pintxos bar around the bay, grouped
+ * under small headings. Tap one and the crew hop straight there.
  */
 export function showQuickTravel(root: HTMLElement, stops: QuickStop[], reducedMotion: boolean): QuickTravelMenu {
   let cancel = () => {};
@@ -33,7 +34,12 @@ export function showQuickTravel(root: HTMLElement, stops: QuickStop[], reducedMo
       gsap.to(layer, { opacity: 0, duration: reducedMotion ? 0.1 : 0.25, onComplete: () => (layer.remove(), resolve(id)) });
     };
     cancel = () => finish(null);
+    let group: string | undefined;
     for (const stop of stops) {
+      if (stop.group && stop.group !== group) {
+        group = stop.group;
+        list.append(h('h3', { class: 'qt-group', text: group }));
+      }
       const b = h(
         'button',
         { class: `qt-stop${stop.here ? ' here' : ''}`, attrs: { type: 'button' } },
