@@ -126,9 +126,9 @@ export interface BuildingDef {
   kind: 'row' | 'oldtown' | 'landmark' | 'gros';
 }
 
-const WALL_PALETTE = ['#f4e3c8', '#f7d6bd', '#f1c9a5', '#efe6d3', '#f6dcc9', '#e9d3b4', '#f3ceb6', '#fbefdc'];
-const OLDTOWN_PALETTE = ['#f2c9a0', '#e9b48f', '#f4dcb5', '#d9b6a3', '#f0d8c0', '#e7c39b', '#f5e1c6', '#cfdcc8'];
-const ROOF_PALETTE = ['#c4643f', '#b85a3a', '#cf7347', '#a9503a', '#c86b4a'];
+const WALL_PALETTE = ['#ffe6b8', '#ffd2c2', '#ffc99a', '#fff1d6', '#ffd9e4', '#ffe08f', '#cdeee0', '#fff6e4', '#c9e6fb'];
+const OLDTOWN_PALETTE = ['#ffc78f', '#ffb08a', '#ffdf9e', '#f6b8b0', '#ffe2bd', '#ffcf73', '#fff0cf', '#bfe7cf', '#bcd9f5'];
+const ROOF_PALETTE = ['#e0623a', '#d4512f', '#ec7a45', '#c74a33', '#e86e48'];
 
 function pick<T>(rng: () => number, arr: readonly T[]): T {
   return arr[Math.floor(rng() * arr.length) % arr.length];
