@@ -87,7 +87,13 @@ export class TouchControls {
   private onDown = (e: PointerEvent): void => {
     if (e.pointerType === 'mouse') return;
     e.preventDefault();
-    this.canvas.setPointerCapture?.(e.pointerId);
+    // Safari can refuse capture for a touch it already captured implicitly; the
+    // window listeners track the finger either way, so a refusal is harmless.
+    try {
+      this.canvas.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Keep going: the stick must still appear.
+    }
     const exploring = document.body.dataset.state === 'exploring';
     const hasStick = [...this.tracks.values()].some((t) => t.role === 'stick');
     const role = exploring && !hasStick && e.clientX < window.innerWidth * 0.5 ? 'stick' : 'look';
