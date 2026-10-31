@@ -10,7 +10,7 @@ export function surfaceTexture(kind: Surface): THREE.CanvasTexture {
   c.width = c.height = 256;
   const g = c.getContext('2d')!;
   const rng = mulberry32(701 + ['paving', 'cobbles', 'sand', 'grass', 'tiles'].indexOf(kind));
-  g.fillStyle = kind === 'cobbles' ? '#969b9c' : kind === 'tiles' ? '#b6aaa0' : '#c9cdc8';
+  g.fillStyle = kind === 'cobbles' ? '#b1a796' : kind === 'tiles' ? '#b6aaa0' : '#c9cdc8';
   g.fillRect(0, 0, 256, 256);
   if (kind === 'paving' || kind === 'cobbles' || kind === 'tiles') {
     const rows = kind === 'paving' ? 4 : 8;
@@ -21,8 +21,8 @@ export function surfaceTexture(kind: Surface): THREE.CanvasTexture {
     for (let row = 0; row < rows; row++) {
       for (let x = -step; x < 256; x += step) {
         const xx = x + (row % 2) * step / 2;
-        const v = Math.floor((kind === 'paving' ? 230 : kind === 'tiles' ? 225 : 204) + rng() * (kind === 'paving' ? 18 : 28));
-        g.fillStyle = `rgb(${v},${v - 3},${v - 8})`;
+        const v = Math.floor((kind === 'paving' ? 230 : kind === 'tiles' ? 225 : 218) + rng() * (kind === 'paving' ? 18 : 28));
+        g.fillStyle = kind === 'cobbles' ? `rgb(${v},${v - 9},${v - 22})` : `rgb(${v},${v - 3},${v - 8})`;
         g.beginPath();
         g.roundRect(xx + 2, row * h + 2, step - 4, h - 4, kind === 'cobbles' ? 7 : 1);
         g.fill();
