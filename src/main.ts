@@ -3,7 +3,7 @@ import './styles/story.css';
 import * as THREE from 'three';
 import gsap from 'gsap';
 import { validateContent, formatIssues } from './data/validate.ts';
-import { locations } from './data/locations.ts';
+import { areas, locations } from './data/locations.ts';
 import { banter } from './data/banter.ts';
 import type { CrewId } from './data/types.ts';
 import { GameLoop } from './engine/loop.ts';
@@ -63,6 +63,8 @@ import { foodThumbnail, makeDish } from './world/food3d.ts';
 import { playEnding, showBook, type EndingSlide } from './ui/ending.ts';
 import { trip as tripTuning } from './data/tuning.ts';
 import { TouchControls } from './ui/touch.ts';
+import { showQuickTravel } from './ui/quickTravel.ts';
+import { travelLinks } from './world/travel.ts';
 
 const loadingFill = document.getElementById('loading-fill');
 const loadingStep = document.getElementById('loading-step');
@@ -111,6 +113,24 @@ const TIPS = [
   'Morning txakoli is a local tradition (according to Annette).',
   'Local wisdom: one pintxo and one drink per bar, then move on.',
   'Pack for everything: gumboots, a raincoat, and room for cheesecake.',
+];
+
+/**
+ * Quick travel stops, west to east. Ground-level stops are open from the start;
+ * a stop with `via` borrows that travel link's arrival point and unlocks once
+ * its sight has been discovered, so the ride itself always comes first.
+ */
+const QUICK_STOPS: Array<{ area: string; at?: { x: number; z: number; heading: number }; via?: string; sight?: string; locked?: string }> = [
+  { area: 'igueldo', via: 'funicular-up', sight: 'igueldo-view', locked: 'Ride the funicular up first' },
+  { area: 'peine', at: { x: -80, z: -29, heading: Math.PI } },
+  { area: 'miramar', at: { x: -49, z: 6, heading: Math.PI } },
+  { area: 'santa-clara', via: 'boat-out', sight: 'santa-clara', locked: 'Take the little boat over first' },
+  { area: 'la-concha' },
+  { area: 'alderdi-eder', at: { x: 28, z: 4, heading: Math.PI } },
+  { area: 'parte-vieja', at: { x: 53.4, z: 3.5, heading: Math.PI / 2 } },
+  { area: 'plaza', at: { x: 78.5, z: 6, heading: Math.PI } },
+  { area: 'urgull', via: 'urgull-up', sight: 'urgull-castle', locked: 'Climb the path up first' },
+  { area: 'gros', at: { x: 125, z: -5, heading: Math.PI } },
 ];
 
 class Game {
@@ -581,6 +601,7 @@ class Game {
         else if (action === 'resetCamera') s.rig.resetView();
         else if (action === 'switchFriend') this.switchFriend();
         else if (action === 'journal') void this.openJournal('sights');
+        else if (action === 'map') void this.openQuickTravel();
         else if (action === 'interact' || action === 'confirm') this.interact();
         break;
       case 'cinematic':
@@ -844,6 +865,7 @@ class Game {
         settings: this.settingsFor,
         history: () => this.bubbles.history,
         journal: () => void this.journalFromMenu(),
+        quickTravel: () => void this.quickTravelFromMenu(),
         callItANight: this.s.dayNight.hour >= 19.5 || this.s.dayNight.hour < 4 ? () => void this.callItANightFromMenu() : undefined,
       },
       this.reducedMotion,
@@ -862,23 +884,68 @@ class Game {
 
   /** Safe recovery: put the crew back on the promenade without touching progress. */
   private async returnToPromenade(): Promise<void> {
-    const s = this.s;
     const menu = this.pause;
     this.pause = null;
     await menu?.close();
+    const p = spawnPoint();
+    await this.hop(p.x, p.z, Math.PI);
+  }
+
+  /** Fade out, move the whole crew and camera, fade back in. Progress is untouched. */
+  private async hop(x: number, z: number, heading: number): Promise<void> {
+    const s = this.s;
     s.rig.cancelCinematic();
     this.banter.interrupt();
     this.bubbles.clear();
+    this.state.set('cinematic');
     await gsap.to(this.fade, { opacity: 1, duration: this.reducedMotion ? 0.05 : 0.3 });
-    const p = spawnPoint();
-    s.crew.teleport(p.x, p.z, Math.PI);
+    s.crew.teleport(x, z, heading);
     this.faceTarget = null;
-    s.rig.snapTo(p.x, groundY(p.x, p.z), p.z);
+    s.rig.snapTo(x, groundY(x, z), z);
     s.rig.resetView();
     this.audio.setDucked(false);
     this.state.set('exploring');
     await gsap.to(this.fade, { opacity: 0, duration: this.reducedMotion ? 0.05 : 0.4 });
     s.renderer.canvas.focus({ preventScroll: true });
+  }
+
+  /** Quick travel: pick a stop on the card and the crew hop straight there. */
+  private async openQuickTravel(): Promise<void> {
+    if (this.state.name !== 'exploring') return;
+    this.state.set('scene');
+    this.s.input.clear();
+    this.audio.ui('open');
+    const links = travelLinks();
+    const stops = QUICK_STOPS.map((q) => {
+      const area = areas.find((a) => a.id === q.area)!;
+      const locked = q.sight && !this.discovered.has(q.sight) ? (q.locked ?? 'Not yet') : null;
+      return { id: q.area, name: area.name, subtitle: area.subtitle, locked, here: this.currentArea === q.area };
+    });
+    const menu = showQuickTravel(this.s.ui, stops, this.reducedMotion);
+    // Esc / B closes the card like "Stay here".
+    this.advance = menu.cancel;
+    const id = await menu.result;
+    this.advance = null;
+    this.audio.ui('close');
+    const stop = QUICK_STOPS.find((q) => q.area === id);
+    if (!stop) {
+      this.state.set('exploring');
+      this.s.renderer.canvas.focus({ preventScroll: true });
+      return;
+    }
+    const via = stop.via ? links.find((l) => l.id === stop.via)?.to : undefined;
+    const p = stop.at ?? via ?? { ...spawnPoint(), heading: Math.PI };
+    await this.hop(p.x, p.z, p.heading);
+    void this.autosave();
+  }
+
+  private async quickTravelFromMenu(): Promise<void> {
+    const menu = this.pause;
+    this.pause = null;
+    await menu?.close();
+    this.audio.setDucked(false);
+    this.state.set('exploring');
+    await this.openQuickTravel();
   }
 
   private async backToTitle(): Promise<void> {

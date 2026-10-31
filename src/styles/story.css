@@ -1087,3 +1087,71 @@
   font-family: var(--hand);
   font-size: 1.15rem;
 }
+
+/* --- Quick travel ------------------------------------------------------------------- */
+.quick-travel {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 1.3rem;
+}
+
+.qt-note {
+  margin: -0.4rem 0 0.8rem;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.qt-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 0.55rem;
+  overflow-y: auto;
+  padding: 0.2rem;
+}
+
+.qt-stop {
+  display: grid;
+  gap: 0.1rem;
+  min-height: 3.4rem;
+  padding: 0.55rem 0.8rem;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fffaf0;
+  box-shadow: 0 3px 0 rgba(58, 44, 37, 0.85);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.qt-stop:hover:not(:disabled),
+.qt-stop:focus-visible {
+  background: #ffe2a8;
+  outline: none;
+}
+
+.qt-stop:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(58, 44, 37, 0.85);
+}
+
+.qt-stop .qt-sub {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.qt-stop:disabled {
+  cursor: default;
+  opacity: 0.6;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.qt-stop.here {
+  opacity: 1;
+  border-style: solid;
+  background: #e3f1f3;
+}

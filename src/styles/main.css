@@ -1113,12 +1113,12 @@ body.touch-mode .hint {
   font-size: 0.85rem;
 }
 
-/* Portrait phones: the area banner drops below the status card. */
+/* Portrait phones: the area banner sits below the status card, clear of the prompt. */
 @media (max-width: 560px) {
   body.touch-mode .area-banner {
-    top: auto;
-    bottom: calc(200px + env(safe-area-inset-bottom));
-    max-width: calc(100vw - 32px);
+    top: calc(186px + env(safe-area-inset-top));
+    bottom: auto;
+    max-width: calc(100vw - 124px);
   }
 }
 
@@ -1164,5 +1164,17 @@ body.touch-mode .hint {
   .stick-base:not(.on) .stick-knob,
   .stick-base {
     transition: none;
+  }
+}
+
+.touch-map {
+  right: calc(32px + env(safe-area-inset-right));
+  bottom: calc(184px + env(safe-area-inset-bottom));
+}
+
+@media (max-height: 500px) {
+  .touch-map {
+    right: calc(102px + env(safe-area-inset-right));
+    bottom: calc(118px + env(safe-area-inset-bottom));
   }
 }

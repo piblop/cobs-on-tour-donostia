@@ -81,6 +81,7 @@ export function controlsList(): HTMLDListElement {
     ...row(['Scroll'], 'Zoom in and out (or + and -)'),
     ...row(['Z', 'C'], 'Turn the camera (or right-drag, or right stick)'),
     ...row(['X'], 'Reset the camera'),
+    ...row(['M'], 'Quick travel around town'),
     ...row(['Esc'], 'Pause (or Start button)'),
   );
 }

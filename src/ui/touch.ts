@@ -60,6 +60,7 @@ export class TouchControls {
       pad('touch-act', '✋', 'Interact', 'interact'),
       pad('touch-switch', '⇄', 'Switch friend', 'switchFriend'),
       pad('touch-journal', '📖', 'Journal', 'journal'),
+      pad('touch-map', '🗺', 'Quick travel', 'map'),
       pad('touch-pause', 'II', 'Pause', 'pause'),
     );
     root.append(ui);

@@ -115,7 +115,9 @@ export class Hud {
     if (this.promptLabel.textContent !== label) this.promptLabel.textContent = label;
     if (this.promptKey.textContent !== key) this.promptKey.textContent = key;
     const w = this.prompt.offsetWidth;
-    const x = Math.round(Math.min(window.innerWidth - w - 8, Math.max(8, screen.x - w / 2)));
+    // On touch screens keep clear of the button column on the right.
+    const right = document.body.classList.contains('touch-mode') ? 96 : 8;
+    const x = Math.round(Math.max(8, Math.min(window.innerWidth - w - right, screen.x - w / 2)));
     const y = Math.round(Math.min(window.innerHeight - 50, Math.max(8, screen.y + 26)));
     this.prompt.style.transform = `translate(${x}px, ${y}px)`;
     if (!this.promptVisible) {

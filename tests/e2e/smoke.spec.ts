@@ -222,7 +222,27 @@ test.describe('on a phone', () => {
     await touch('touchEnd');
     await expect(page.locator('.stick-base')).not.toHaveClass(/on/);
 
+    await expect(page.getByRole('button', { name: 'Quick travel' })).toBeVisible();
     await page.getByRole('button', { name: 'Journal' }).tap();
     await expect(page.getByRole('heading', { name: 'Trip journal' })).toBeVisible();
   });
+});
+
+test('quick travel hops across town; hilltops wait for the real trip', async ({ page }) => {
+  await startTrip(page);
+  await page.keyboard.press('KeyM');
+  const card = page.getByRole('dialog', { name: 'Where to?' });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('button', { name: /Monte Igueldo/ })).toBeDisabled();
+  await expect(card.getByRole('button', { name: /Monte Igueldo/ })).toContainText('Ride the funicular up first');
+  await expect(card.getByRole('button', { name: /La Concha/ })).toContainText('You are here');
+  await card.getByRole('button', { name: /Gros & Zurriola/ }).click();
+  await expect.poll(() => state(page), { timeout: 10_000 }).toBe('exploring');
+  await expect(page.locator('.area-banner')).toContainText('Gros & Zurriola', { timeout: 10_000 });
+  // Escape closes the card without moving.
+  await page.keyboard.press('KeyM');
+  await expect(card).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(card).toBeHidden();
+  await expect.poll(() => state(page)).toBe('exploring');
 });
