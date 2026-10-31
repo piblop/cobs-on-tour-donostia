@@ -240,6 +240,8 @@ class Game {
     if (!prev || prev.quality !== v.quality || prev.resolutionScale !== v.resolutionScale) {
       s.renderer.apply({ quality: v.quality, resolutionScale: v.resolutionScale });
       s.landmarks.setQuality(v.quality);
+      // Fewer townsfolk on lighter presets; the crew and encounters are unaffected.
+      s.crowds.density = v.quality === 'low' ? 0.5 : v.quality === 'medium' ? 0.85 : 1;
     }
     this.lastSettings = v;
   }

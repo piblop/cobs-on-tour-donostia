@@ -101,6 +101,7 @@ export class Renderer {
   private renderPass: RenderPass | null = null;
   private postcard: ShaderPass | null = null;
   private settings: RenderSettings = { quality: 'medium', resolutionScale: 1 };
+  private frame = 0;
   contextLost = false;
 
   constructor(
@@ -216,6 +217,12 @@ export class Renderer {
   render(): void {
     if (this.contextLost) return;
     if (this.postcard) this.postcard.uniforms.night.value = Number(this.scene.userData.night) || 0;
+    // Phones (low preset): redraw the sun's shadow map every other frame. The shadow
+    // pass re-renders every caster, so this nearly halves its cost; at 60 fps the
+    // half-step lag on moving shadows is invisible.
+    const low = this.settings.quality === 'low';
+    this.renderer.shadowMap.autoUpdate = !low;
+    if (low && this.frame++ % 2 === 0) this.renderer.shadowMap.needsUpdate = true;
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }

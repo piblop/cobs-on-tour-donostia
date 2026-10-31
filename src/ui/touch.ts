@@ -48,6 +48,8 @@ export class TouchControls {
         e.preventDefault();
         this.input.device = 'touch';
         this.input.press(action);
+        // A tiny tick under the thumb where the phone supports it (Android); iOS ignores it.
+        navigator.vibrate?.(8);
       });
       return b;
     };
@@ -144,6 +146,8 @@ export class TouchControls {
     if (t.role === 'stick') {
       this.input.setStick(0, 0);
       this.stickBase.classList.remove('on');
+      // The knob springs home as the base fades (see .stick-base CSS).
+      this.stickKnob.style.transform = '';
     } else if (performance.now() - t.t0 < TAP_MS && Math.hypot(t.x - t.x0, t.y - t.y0) < TAP_SLOP && e.type === 'pointerup') {
       // Outside free play a tap moves things along: skip a glide, close a card, next line.
       if (document.body.dataset.state !== 'exploring') this.input.press('interact');

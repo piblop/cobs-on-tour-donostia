@@ -31,3 +31,4 @@ desktop.ini
 .probe.mjs
 .closeup.mjs
 .live.mjs
+.perf.mjs
