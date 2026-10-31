@@ -46,7 +46,8 @@ export class Weather {
     if (this.plannedDay === day) return;
     this.plannedDay = day;
     const rng = mulberry32(this.seed * 31 + day * 977);
-    this.window = rng() < 0.4 ? { day, start: 12 + rng() * 5.5, end: 0 } : null;
+    // Mostly sunshine: a shower turns up on roughly one day in seven.
+    this.window = rng() < 0.14 ? { day, start: 12 + rng() * 5.5, end: 0 } : null;
     if (this.window) this.window.end = this.window.start + 0.9 + rng() * 0.7;
   }
 

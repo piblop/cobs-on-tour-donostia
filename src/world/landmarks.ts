@@ -1,7 +1,5 @@
 import * as THREE from 'three';
 import {
-  BASILICA_BLOCK,
-  BRETXA_BLOCK,
   BRIDGE,
   GROS,
   KURSAAL,
@@ -20,6 +18,8 @@ import {
   peineLayout,
   travelStops,
 } from './map.ts';
+import { createSightArt } from './sightArt.ts';
+import type { QualityPreset } from '../engine/renderer.ts';
 import { mulberry32 } from '../engine/random.ts';
 import { applyCutaway, waterTime, windowGlow } from './materials.ts';
 import { shoreFoamMaterial, surfaceMaterial } from './surfaces.ts';
@@ -39,7 +39,8 @@ export interface Landmarks {
   ferry: THREE.Object3D;
   /** Night glow for the Kursaal cubes. */
   kursaalGlow: THREE.MeshLambertMaterial;
-  update(time: number, reducedMotion: boolean): void;
+  setQuality(quality: QualityPreset): void;
+  update(time: number, reducedMotion: boolean, vehicleInUse?: boolean): void;
   dispose(): void;
 }
 
@@ -50,9 +51,13 @@ export function createLandmarks(): Landmarks {
   const mats: THREE.Material[] = [];
   const texs: THREE.Texture[] = [];
   const G = <T extends THREE.BufferGeometry>(g: T) => (geos.push(g), g);
+  const materialCache = new Map<string, THREE.MeshLambertMaterial>();
   const M = (colour: string, extra: THREE.MeshLambertMaterialParameters = {}) => {
-    const m = new THREE.MeshLambertMaterial({ color: colour, ...extra });
+    const key = extra.map ? null : `${colour}:${JSON.stringify(extra)}`;
+    if (key && materialCache.has(key)) return materialCache.get(key)!;
+    const m = applyCutaway(new THREE.MeshLambertMaterial({ color: colour, ...extra }));
     mats.push(m);
+    if (key) materialCache.set(key, m);
     return m;
   };
   const mesh = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number, cast = true) => {
@@ -67,13 +72,14 @@ export function createLandmarks(): Landmarks {
   const darkStone = M('#b9ab98', { flatShading: true });
   const white = M('#fbfaf6');
   const iron = M('#4a4f52');
-  const rust = M('#8a4b2a', { flatShading: true });
   const surface = (kind: Parameters<typeof surfaceMaterial>[0], color: string, vertexColors = false) => {
     const m = surfaceMaterial(kind, color, vertexColors); mats.push(m); texs.push(m.map!); return m;
   };
   const lawn = surface('grass', '#9bbf87');
   const sand = surface('sand', '#f5dfa8', true);
   const rng = mulberry32(9090);
+  const art = createSightArt();
+  group.add(art.group);
 
   // --- Summit plateaus -------------------------------------------------------------
   for (const [name, top] of Object.entries(SUMMITS)) {
@@ -110,22 +116,6 @@ export function createLandmarks(): Landmarks {
   legs.rotation.z = 0.25;
   const legs2 = mesh(new THREE.BoxGeometry(0.2, 4.4, 0.2), iron, ig.x - 3, ig.y + 2.1, ig.z - 3.4);
   legs2.rotation.z = -0.25;
-  mesh(new THREE.CylinderGeometry(1.4, 1.7, 5.5, 10), stone, ig.x - 4, ig.y + 2.75, ig.z + 5);
-  mesh(new THREE.ConeGeometry(1.7, 1.3, 10), M('#c4643f'), ig.x - 4, ig.y + 6.1, ig.z + 5);
-  const merry = new THREE.Group();
-  merry.position.set(ig.x + 3, ig.y, ig.z + 5.5);
-  merry.add(new THREE.Mesh(G(new THREE.CylinderGeometry(2.1, 2.2, 0.3, 18)), M('#f3e3c6')));
-  const merryRoof = new THREE.Mesh(G(new THREE.ConeGeometry(2.4, 1.2, 12)), M('#7fd6cf'));
-  merryRoof.position.y = 2.7;
-  merry.add(merryRoof);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const horse = new THREE.Mesh(G(new THREE.BoxGeometry(0.25, 0.4, 0.75)), M(['#ffffff', '#f2c14e', '#e86f8e'][i % 3]));
-    horse.position.set(Math.cos(a) * 1.5, 0.9, Math.sin(a) * 1.5);
-    horse.rotation.y = -a;
-    merry.add(horse);
-  }
-  group.add(merry);
   // Bunting between the attractions.
   for (let i = 0; i < 14; i++) {
     const t = i / 13;
@@ -195,8 +185,8 @@ export function createLandmarks(): Landmarks {
     for (const p of poly.slice(1)) shape.lineTo(p.x, -p.z);
     const floor = new THREE.ShapeGeometry(shape);
     floor.rotateX(-Math.PI / 2);
-    floor.translate(0, PROMENADE_Y - 0.01, 0);
-    const f = mesh(floor, M('#e8dcc4'), 0, 0, 0, false);
+    floor.translate(0, PROMENADE_Y + 0.025, 0);
+    const f = mesh(floor, surface('paving', '#d4c8b6'), 0, 0, 0, false);
     f.receiveShadow = true;
     // Rocky slope inland of the walkway, rising to Igueldo.
     {
@@ -216,25 +206,6 @@ export function createLandmarks(): Landmarks {
     const seaSide = poly.slice(2, poly.length - 1).map((p) => new THREE.Vector3(p.x, PROMENADE_Y + 0.95, p.z));
     seaSide.push(new THREE.Vector3(peine.A.x, PROMENADE_Y + 0.95, peine.A.z));
     mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seaSide), 60, 0.06, 5), M('#fbfbf7'), 0, 0, 0, false);
-    // The three combs: curling iron claws on rocks in the surf.
-    peine.sculptures.forEach((p, i) => {
-      const rock = mesh(new THREE.DodecahedronGeometry(1.6 + i * 0.3, 0), darkStone, p.x, 0.2, p.z, false);
-      rock.scale.y = 0.6;
-      const comb = new THREE.Group();
-      comb.position.set(p.x, 0.9, p.z);
-      comb.rotation.y = rng() * Math.PI * 2;
-      const post = new THREE.Mesh(G(new THREE.BoxGeometry(0.45, 1.6, 0.45)), rust);
-      post.position.y = 0.8;
-      comb.add(post);
-      for (let j = 0; j < 3; j++) {
-        const claw = new THREE.Mesh(G(new THREE.TorusGeometry(0.85, 0.16, 6, 10, Math.PI * 0.75)), rust);
-        claw.position.set(0, 1.5, 0);
-        claw.rotation.set(Math.PI / 2, (j / 3) * Math.PI * 2, 0.3);
-        claw.castShadow = true;
-        comb.add(claw);
-      }
-      group.add(comb);
-    });
   }
   // Spray that bursts up through the rocks now and then.
   const sprayGeo = G(new THREE.IcosahedronGeometry(0.16, 1));
@@ -244,7 +215,8 @@ export function createLandmarks(): Landmarks {
   spray.frustumCulled = false;
   group.add(spray);
   const sprayBits = Array.from({ length: 36 }, (_, i) => ({
-    origin: peine.sculptures[i % 3],
+    origin: i < 21 ? peine.sculptures[i % 3] : art.vents[i % art.vents.length],
+    baseY: i < 21 ? 0.6 : PROMENADE_Y + 0.05,
     vx: (rng() - 0.5) * 3,
     vz: (rng() - 0.5) * 3,
     vy: 5 + rng() * 4,
@@ -277,45 +249,16 @@ export function createLandmarks(): Landmarks {
       hedge.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
     }
     const flowers = ['#e86f8e', '#f2c14e', '#fbfaf6', '#b98be0'];
-    for (let i = 0; i < 18; i++) {
-      const x0 = MIRAMAR.from + 2 + rng() * (MIRAMAR.to - MIRAMAR.from - 4);
-      const p = bayPoint(x0, 21.5 + rng() * 3.5);
-      mesh(new THREE.SphereGeometry(0.28, 6, 5), M(flowers[i % flowers.length]), p.x, PROMENADE_Y + 0.25, p.z, false);
-    }
-  }
-
-  // --- Basilica facade details ------------------------------------------------------------
-  {
-    const bx = (BASILICA_BLOCK.minX + BASILICA_BLOCK.maxX) / 2;
-    const fz = BASILICA_BLOCK.maxZ - 1.1;
-    const portal = mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.2, 18, 1, false, 0, Math.PI), M('#5b3a28'), bx, PROMENADE_Y + 2.6, fz + 0.62, false);
-    portal.rotation.x = Math.PI / 2;
-    portal.rotation.z = Math.PI;
-    mesh(new THREE.BoxGeometry(2.2, 2.6, 0.2), M('#5b3a28'), bx, PROMENADE_Y + 1.3, fz + 0.62, false);
-    const rose = mesh(new THREE.TorusGeometry(0.7, 0.14, 6, 18), M('#c9b48c'), bx, PROMENADE_Y + 7.4, fz + 0.66, false);
-    rose.rotation.y = 0;
-    mesh(new THREE.CircleGeometry(0.6, 18), M('#7aa3bd'), bx, PROMENADE_Y + 7.4, fz + 0.68, false);
-    // Ornate top of the facade.
-    mesh(new THREE.ConeGeometry(1.6, 1.8, 4), stone, bx, PROMENADE_Y + 13.3, fz + 0.4).rotation.y = Math.PI / 4;
-    for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(5.2 - i * 0.6, 0.25, 0.4), stone, bx, PROMENADE_Y + 0.12 + i * 0.25, fz + 1.2 + i * -0.35, false);
-  }
-
-  // --- Mercado de la Bretxa: arches and stalls --------------------------------------------
-  {
-    const mx = (BRETXA_BLOCK.minX + BRETXA_BLOCK.maxX) / 2;
-    const fz = BRETXA_BLOCK.minZ + 0.2;
-    for (let i = -1; i <= 1; i++) {
-      const arch = mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.1, 16, 1, false, 0, Math.PI), M('#5f8a7a'), mx + i * 2.1, PROMENADE_Y + 3.4, fz - 0.06, false);
-      arch.rotation.x = -Math.PI / 2;
-      mesh(new THREE.BoxGeometry(1.7, 2.6, 0.1), M('#3f5f55'), mx + i * 2.1, PROMENADE_Y + 2.0, fz - 0.06, false);
-    }
-    const stallColours = ['#2f7f86', '#c4513f', '#f2c14e'];
-    for (let i = 0; i < 3; i++) {
-      const sx = mx - 2.4 + i * 2.4;
-      mesh(new THREE.BoxGeometry(1.8, 0.9, 0.9), M('#b98a5a'), sx, PROMENADE_Y + 0.45, fz - 1.6);
-      const canopy = mesh(new THREE.BoxGeometry(2, 0.1, 1.2), M(stallColours[i]), sx, PROMENADE_Y + 2.1, fz - 1.6);
-      canopy.rotation.x = 0.2;
-      for (let j = 0; j < 5; j++) mesh(new THREE.SphereGeometry(0.12, 6, 5), M(['#d8432f', '#5f8a3a', '#f2c45a', '#9aa7ad'][(i + j) % 4]), sx - 0.6 + j * 0.3, PROMENADE_Y + 0.98, fz - 1.6, false);
+    for (const side of [-1, 1]) {
+      const x0 = side < 0 ? MIRAMAR.from + 2.1 : MIRAMAR.to - 2.1;
+      const a = bayPoint(x0, 21.7), b = bayPoint(x0, 25);
+      const bed = mesh(new THREE.BoxGeometry(1.2, 0.08, 3.5), M('#74594b'), (a.x + b.x) / 2, PROMENADE_Y + 0.055, (a.z + b.z) / 2, false);
+      bed.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+      for (let i = 0; i < 12; i++) {
+        const p = bayPoint(x0 + (i % 2 ? -0.3 : 0.3), 21.8 + Math.floor(i / 2) * 0.56);
+        mesh(new THREE.SphereGeometry(0.24, 6, 4), M('#5f854d'), p.x, PROMENADE_Y + 0.14, p.z, false);
+        mesh(new THREE.SphereGeometry(0.14, 5, 3), M(flowers[i % flowers.length]), p.x, PROMENADE_Y + 0.31, p.z, false);
+      }
     }
   }
 
@@ -355,11 +298,11 @@ export function createLandmarks(): Landmarks {
     const uv: number[] = [];
     let n = 0;
     for (const f of faces) {
-      for (const floorY of [PROMENADE_Y + 5.1, PROMENADE_Y + 8.2]) {
+      for (const floorY of [PROMENADE_Y + 6, PROMENADE_Y + 9.15]) {
         for (let i = 0; i < 4 && n < 32; i++, n++) {
-          const along = 0.9 + i * 1.95;
-          const cx = f.x0 + f.dirX * along + f.nx * 0.02;
-          const cz = f.z0 + f.dirZ * along + f.nz * 0.02;
+          const along = 1 + i * 2;
+          const cx = f.x0 + f.dirX * along + f.nx * 0.7;
+          const cz = f.z0 + f.dirZ * along + f.nz * 0.7;
           const hw = 0.32;
           const hh = 0.26;
           const corners = [
@@ -378,7 +321,8 @@ export function createLandmarks(): Landmarks {
           ];
           for (const t of [0, 1, 2, 0, 2, 3]) {
             pos.push(...corners[t]);
-            uv.push(...uvs[t]);
+            const [u, v] = uvs[t];
+            uv.push(f.nx === 1 || f.nz === -1 ? u0 + 1 / 8 - (u - u0) : u, v);
           }
         }
       }
@@ -388,6 +332,7 @@ export function createLandmarks(): Landmarks {
     plates.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     plates.computeVertexNormals();
     const plateMesh = new THREE.Mesh(G(plates), new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
+    applyCutaway(plateMesh.material);
     mats.push(plateMesh.material as THREE.Material);
     group.add(plateMesh);
   }
@@ -461,7 +406,8 @@ export function createLandmarks(): Landmarks {
   const ribs: THREE.BufferGeometry[] = [];
   for (const k of KURSAAL) {
     const cube = mesh(new THREE.BoxGeometry(k.w, k.h, k.d), kursaalGlow, k.x, PROMENADE_Y + k.h / 2, k.z);
-    cube.rotation.z = 0.04;
+    cube.rotation.z = k === KURSAAL[0] ? 0.075 : -0.06;
+    cube.rotation.x = k === KURSAAL[0] ? -0.035 : 0.045;
     cube.updateMatrix();
     const rib = (w: number, h: number, d: number, x: number, y: number, z: number) => {
       const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); g.applyMatrix4(cube.matrix); ribs.push(g);
@@ -469,7 +415,7 @@ export function createLandmarks(): Landmarks {
     for (const side of [-1, 1]) {
       for (let x = -k.w / 2; x <= k.w / 2 + 0.01; x += k.w / 12) rib(0.045, k.h, 0.065, x, 0, side * (k.d / 2 + 0.02));
       for (let z = -k.d / 2; z <= k.d / 2 + 0.01; z += k.d / 12) rib(0.065, k.h, 0.045, side * (k.w / 2 + 0.02), 0, z);
-      for (const y of [-k.h / 2, 0, k.h / 2]) {
+      for (let y = -k.h / 2; y <= k.h / 2 + 0.01; y += k.h / 6) {
         rib(k.w + 0.1, 0.075, 0.1, 0, y, side * k.d / 2);
         rib(0.1, 0.075, k.d, side * k.w / 2, y, 0);
       }
@@ -554,29 +500,54 @@ export function createLandmarks(): Landmarks {
   mats.push(signMesh.material as THREE.Material);
 
   const tmp = new THREE.Object3D();
+  // Batch the remaining static fittings locally, keeping distant sights culled.
+  const batches = new Map<string, { mat: THREE.Material; cast: boolean; meshes: THREE.Mesh[] }>();
+  for (const child of [...group.children]) {
+    if (!(child instanceof THREE.Mesh) || child instanceof THREE.InstancedMesh || Array.isArray(child.material)) continue;
+    const key = `${child.material.uuid}:${child.castShadow}:${Math.floor(child.position.x / 24)}:${Math.floor(child.position.z / 24)}`;
+    let batch = batches.get(key);
+    if (!batch) { batch = { mat: child.material, cast: child.castShadow, meshes: [] }; batches.set(key, batch); }
+    batch.meshes.push(child);
+  }
+  for (const b of batches.values()) {
+    if (b.meshes.length < 2) continue;
+    const pieces = b.meshes.map((m) => { m.updateMatrix(); return m.geometry.clone().applyMatrix4(m.matrix); });
+    const g = G(mergeGeometries(pieces)); pieces.forEach((p) => p.dispose());
+    b.meshes.forEach((m) => group.remove(m));
+    const m = new THREE.Mesh(g, b.mat); m.castShadow = b.cast; m.receiveShadow = true; group.add(m);
+  }
   return {
     group,
     funicularCar,
+    setQuality(quality) { art.setQuality(quality); spray.count = quality === 'low' ? 21 : 36; },
     funicularPath: track,
     ferry,
     kursaalGlow,
-    update(time, reducedMotion) {
+    update(time, reducedMotion, vehicleInUse = false) {
+      art.update(time, reducedMotion);
+      // Travel owns this vehicle during cinematics; ambient motion never fights its tween.
+      if (!vehicleInUse) {
+        const t = reducedMotion ? 0.45 : 0.5 - Math.cos(time * 0.055) * 0.45;
+        const index = Math.min(track.length - 2, Math.floor(t * (track.length - 1)));
+        funicularCar.position.copy(track[index]).lerp(track[index + 1], t * (track.length - 1) - index);
+        funicularCar.lookAt(track[index + 1]);
+      }
       waterTime.value = reducedMotion ? 0 : time;
       if (!reducedMotion) {
         wheel.rotation.z = time * 0.25;
         for (const g of gondolas) g.rotation.z = -wheel.rotation.z;
-        merry.rotation.y = time * 0.4;
       }
       for (const s of surfers) {
-        s.position.y = Math.sin(time * 1.2 + (s.userData.phase as number)) * 0.12;
-        s.rotation.z = Math.sin(time * 0.9 + (s.userData.phase as number)) * 0.06;
+        const motionTime = reducedMotion ? 0 : time;
+        s.position.y = Math.sin(motionTime * 1.2 + (s.userData.phase as number)) * 0.12;
+        s.rotation.z = Math.sin(motionTime * 0.9 + (s.userData.phase as number)) * 0.06;
       }
       // Bursts every few seconds, staggered across the three combs.
       sprayBits.forEach((b, i) => {
         const cycle = (time * 0.33 + b.phase * 0.15 + (i % 3) * 0.33) % 1;
         const t = cycle * 1.6;
         const alive = !reducedMotion && t < 1.3;
-        tmp.position.set(b.origin.x + b.vx * t, alive ? 0.6 + b.vy * t - 4.9 * t * t : -10, b.origin.z + b.vz * t);
+        tmp.position.set(b.origin.x + b.vx * t, alive ? b.baseY + b.vy * t - 4.9 * t * t : -10, b.origin.z + b.vz * t);
         tmp.scale.setScalar(alive ? Math.max(0.05, 1 - t / 1.3) : 0.01);
         tmp.updateMatrix();
         spray.setMatrixAt(i, tmp.matrix);
@@ -584,6 +555,7 @@ export function createLandmarks(): Landmarks {
       spray.instanceMatrix.needsUpdate = true;
     },
     dispose() {
+      art.dispose();
       spray.dispose();
       sleepers.dispose();
       for (const g of geos) g.dispose();

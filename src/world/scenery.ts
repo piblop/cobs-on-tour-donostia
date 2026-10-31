@@ -4,7 +4,6 @@ import {
   BAY_WEST,
   BEACH_SLOPE,
   BEACH_Y0,
-  CAROUSEL,
   D,
   EAST_LIMIT,
   LANDMARKS,
@@ -227,7 +226,6 @@ export function createScenery(): Scenery {
       }
     `);
   };
-  const flatVc = track(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
   // --- Sky, fog and light ----------------------------------------------------
   // Golden-hour sky: layered gradient, a soft sun with a halo, a warm band
@@ -680,7 +678,6 @@ export function createScenery(): Scenery {
   // --- Hills, island, landmarks ------------------------------------------------
   const hillMat = track(new THREE.MeshLambertMaterial({ color: PALETTE.hill, flatShading: true }));
   const rockMat = track(new THREE.MeshLambertMaterial({ color: PALETTE.rock, flatShading: true }));
-  const stoneMat = track(new THREE.MeshLambertMaterial({ color: '#cdbfa8', flatShading: true }));
   const whiteMat = track(new THREE.MeshLambertMaterial({ color: '#f7f4ec', flatShading: true }));
   const { urgull, igueldo, santaClara } = LANDMARKS;
   for (const [h, seed, top] of [
@@ -696,32 +693,6 @@ export function createScenery(): Scenery {
     skirt.position.set(h.x, 0.2, h.z);
     skirt.updateMatrix();
   }
-  // Urgull: castle walls and the statue on top.
-  {
-    const top = SUMMITS.urgull.y - 0.2;
-    const keep = staticMesh(new THREE.BoxGeometry(6, 2.6, 5), stoneMat, { cast: true, receive: true });
-    keep.position.set(urgull.x + 1, top + 1, urgull.z - 1);
-    keep.updateMatrix();
-    const pedestal = staticMesh(new THREE.CylinderGeometry(0.9, 1.2, 4.5, 8), stoneMat, { cast: true, receive: true });
-    pedestal.position.set(urgull.x + 1, top + 4.6, urgull.z - 1);
-    pedestal.updateMatrix();
-    const figure = staticMesh(new THREE.CapsuleGeometry(0.55, 2.2, 4, 8), whiteMat, { cast: true, receive: true });
-    figure.position.set(urgull.x + 1, top + 8.6, urgull.z - 1);
-    figure.updateMatrix();
-    const arms = staticMesh(new THREE.BoxGeometry(2.6, 0.35, 0.35), whiteMat, { cast: true, receive: true });
-    arms.position.set(urgull.x + 1, top + 9.0, urgull.z - 1);
-    arms.updateMatrix();
-  }
-  // Santa Clara lighthouse.
-  {
-    const lh = staticMesh(new THREE.CylinderGeometry(0.7, 0.9, 3.2, 10), whiteMat, { cast: true, receive: true });
-    lh.position.set(santaClara.x + 1, SUMMITS.santaClara.y + 1.6, santaClara.z);
-    lh.updateMatrix();
-    const cap = staticMesh(new THREE.ConeGeometry(0.9, 0.9, 10), track(new THREE.MeshLambertMaterial({ color: '#c4643f' })), { cast: true, receive: true });
-    cap.position.set(santaClara.x + 1, SUMMITS.santaClara.y + 3.6, santaClara.z);
-    cap.updateMatrix();
-  }
-
   // --- Boats bobbing in the bay ------------------------------------------------
   const boats: Array<{ obj: THREE.Group; phase: number; baseY: number }> = [];
   {
@@ -758,53 +729,6 @@ export function createScenery(): Scenery {
     });
   }
 
-  // --- Carousel in Alderdi Eder -------------------------------------------------
-  const carousel = new THREE.Group();
-  {
-    const cx = CAROUSEL.x;
-    const cz = CAROUSEL.z;
-    const base = new THREE.Mesh(track(new THREE.CylinderGeometry(CAROUSEL.radius, CAROUSEL.radius + 0.2, 0.4, 20)), track(new THREE.MeshLambertMaterial({ color: '#f3e3c6' })));
-    base.position.y = 0.2;
-    const roofGeo = new THREE.ConeGeometry(CAROUSEL.radius + 0.4, 1.6, 16, 1);
-    roofGeo.translate(0, 0, 0);
-    {
-      const nonIndexed = roofGeo.toNonIndexed();
-      const colors: number[] = [];
-      const a = lin('#e86f8e');
-      const b = lin('#fbefdc');
-      const p = nonIndexed.attributes.position;
-      for (let i = 0; i < p.count; i += 3) {
-        const ang = Math.atan2((p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3, (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3);
-        const c = Math.floor(((ang + Math.PI) / (Math.PI * 2)) * 16) % 2 ? a : b;
-        for (let k = 0; k < 3; k++) colors.push(c.r, c.g, c.b);
-      }
-      nonIndexed.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      const roof = new THREE.Mesh(track(nonIndexed), flatVc);
-      roof.position.y = 3.6;
-      roof.castShadow = true;
-      carousel.add(roof);
-    }
-    roofGeo.dispose();
-    const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.18, 0.18, 3.2, 8)), track(new THREE.MeshLambertMaterial({ color: '#f2c14e' })));
-    pole.position.y = 1.9;
-    carousel.add(base, pole);
-    const horseColors = ['#ffffff', '#f2c14e', '#7fd6cf', '#e86f8e'];
-    for (let i = 0; i < 8; i++) {
-      const ang = (i / 8) * Math.PI * 2;
-      const r = CAROUSEL.radius - 0.6;
-      const rod = new THREE.Mesh(track(new THREE.CylinderGeometry(0.03, 0.03, 2.8, 4)), track(new THREE.MeshLambertMaterial({ color: '#d9b25a' })));
-      rod.position.set(Math.cos(ang) * r, 1.9, Math.sin(ang) * r);
-      const horse = new THREE.Mesh(track(new THREE.BoxGeometry(0.28, 0.45, 0.85)), track(new THREE.MeshLambertMaterial({ color: horseColors[i % 4] })));
-      horse.position.set(Math.cos(ang) * r, 1.2, Math.sin(ang) * r);
-      horse.rotation.y = -ang;
-      horse.userData.phase = ang;
-      horse.castShadow = true;
-      carousel.add(rod, horse);
-    }
-    carousel.position.set(cx, PROMENADE_Y, cz);
-  }
-  group.add(carousel);
-
   return {
     group,
     sun,
@@ -820,10 +744,7 @@ export function createScenery(): Scenery {
         b.obj.rotation.z = Math.sin(time * 0.9 + b.phase) * 0.04;
         b.obj.rotation.x = Math.sin(time * 0.7 + b.phase * 1.3) * 0.03;
       }
-      carousel.rotation.y = time * 0.35;
-      for (const child of carousel.children) {
-        if (child.userData.phase !== undefined) child.position.y = 1.2 + Math.sin(time * 2 + (child.userData.phase as number) * 2) * 0.15;
-      }
+
     },
     dispose() {
       for (const d of disposables) d.dispose();

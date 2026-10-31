@@ -22,6 +22,7 @@ export function applyCutaway<T extends THREE.Material>(
   material: T,
   extra?: (shader: THREE.WebGLProgramParametersWithUniforms) => void,
   cacheKey = 'cutaway',
+  radiusScale = 1,
 ): T {
   material.onBeforeCompile = (shader) => {
     extra?.(shader);
@@ -58,7 +59,7 @@ export function applyCutaway<T extends THREE.Material>(
             vec3 closest = uFocus + seg * t;
             float dist = length(vCutWorld - closest);
             // A cone narrowing toward the camera keeps the hole a constant size on screen.
-            float radius = uCutRadius * (1.0 - t * 0.8);
+            float radius = uCutRadius * ${radiusScale.toFixed(2)} * (1.0 - t * 0.8);
             float edge = 1.0 - smoothstep(radius * 0.8, radius, dist);
             // Ordered 4x4 dither so the hole edge reads as soft, not cut.
             vec2 cell = mod(floor(gl_FragCoord.xy), 4.0);
@@ -66,11 +67,22 @@ export function applyCutaway<T extends THREE.Material>(
             float threshold = fract(idx * 0.4375 + floor(idx / 4.0) * 0.1875) * 0.94 + 0.03;
             if (edge > threshold) discard;
           }
-        }`,
+        }
+        // Open the foreground roofs around the two old-town architectural sights.
+        // This is a visual dollhouse cut only; footprints and camera collision stay intact.
+        bool atChurch = distance(uFocus.xz, vec2(68.5, 3.6)) < 6.0;
+        bool atPlaza = distance(uFocus.xz, vec2(78.5, 6.0)) < 6.5;
+        // The church postcard looks down Calle Mayor. Peel the intervening roofs
+        // for that shot too, while leaving the church itself completely intact.
+        bool churchPhoto = uCutEnabled < 0.5 && distance(uFocus.xz, vec2(68.5, -2.0)) < 0.5 && uCam.z > 10.0;
+        if (churchPhoto && abs(vCutWorld.x - 68.5) < 4.2 && vCutWorld.z > 2.1 && vCutWorld.z < uCam.z + 1.0 && vCutWorld.y > 2.8) discard;
+        if (${radiusScale >= 0.9 ? 'true' : 'false'} && uCutEnabled > 0.5 && (atChurch || atPlaza) &&
+            vCutWorld.z < uFocus.z - 0.8 && distance(vCutWorld.xz, uFocus.xz) < 12.0 &&
+            vCutWorld.y > uFocus.y + 1.5) discard;`,
       );
   };
   // Distinct cache key so three doesn't share the program with plain materials.
-  material.customProgramCacheKey = () => cacheKey;
+  material.customProgramCacheKey = () => `${cacheKey}-${radiusScale}`;
   return material;
 }
 

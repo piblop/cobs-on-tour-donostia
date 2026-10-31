@@ -239,6 +239,7 @@ class Game {
     const prev = this.lastSettings;
     if (!prev || prev.quality !== v.quality || prev.resolutionScale !== v.resolutionScale) {
       s.renderer.apply({ quality: v.quality, resolutionScale: v.resolutionScale });
+      s.landmarks.setQuality(v.quality);
     }
     this.lastSettings = v;
   }
@@ -396,7 +397,7 @@ class Game {
     s.scenery.update(this.decorTime);
     for (const fn of this.frameHooks) fn(this.decorTime);
     s.interactables.update(this.decorTime, this.reducedMotion);
-    s.landmarks.update(this.decorTime, this.reducedMotion);
+    s.landmarks.update(this.decorTime, this.reducedMotion, this.state.name === 'cinematic');
     s.landmarks.kursaalGlow.emissiveIntensity = s.dayNight.night * 0.45;
     s.npcs.update(frozen ? 0 : frameDt, this.decorTime, this.reducedMotion);
     s.crowds.update(frozen ? 0 : frameDt, s.dayNight.hour, this.reducedMotion);

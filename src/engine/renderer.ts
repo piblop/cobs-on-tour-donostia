@@ -16,8 +16,8 @@ const PostcardShader = {
     focus: { value: 0.52 },
     band: { value: 0.16 },
     blur: { value: 2.2 },
-    warmth: { value: 0.025 },
-    vignette: { value: 0.22 },
+    warmth: { value: 0.045 },
+    vignette: { value: 0.15 },
     night: { value: 0 },
     bloom: { value: 0.18 },
     bloomTaps: { value: 4 },
@@ -74,7 +74,7 @@ const PostcardShader = {
       }
       // A gentle inkier toe and a little chroma retain the painted pastel palette.
       float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(luma), col, 1.04);
+      col = mix(vec3(luma), col, 1.1);
       col = max(vec3(0.0), (col - 0.018) * 1.035);
       col *= vec3(1.0 + warmth, 1.0 + warmth * 0.35, 1.0 - warmth * 0.5);
       vec2 v = vUv - 0.5;

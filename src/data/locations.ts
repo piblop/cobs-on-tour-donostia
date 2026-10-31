@@ -114,7 +114,7 @@ export const locations: LocationDef[] = [
     interactRadius: 2.4,
     actionLabel: 'Stroll across the lawns',
     polaroidCaption: 'A palace, a lawn and a view. Paulo pretended to own the place.',
-    shot: { position: { x: -45.6, y: 6.4, z: -2.6 }, target: { x: -51.9, y: 4.5, z: 9.5 } },
+    shot: { position: { x: -43, y: 11, z: -8 }, target: { x: -51.9, y: 7.8, z: 9.5 } },
     fact: {
       text: 'Miramar Palace was built in the late 19th century as a royal summer residence, in an English cottage style.',
       source: 'unsourced',
@@ -129,7 +129,7 @@ export const locations: LocationDef[] = [
     interactRadius: 2.2,
     actionLabel: 'Count the numbered balconies',
     polaroidCaption: 'Numbered balconies all the way round. We picked our favourites.',
-    shot: { position: { x: 78.5, y: 4.4, z: 3.2 }, target: { x: 78.5, y: 8.2, z: 15 } },
+    shot: { position: { x: 78.5, y: 16.5, z: 3.2 }, target: { x: 78.5, y: 10.5, z: 15 } },
     fact: {
       text: 'The balconies around the Plaza de la Constitución are numbered, a reminder of the days when the square was used for bullfights.',
       source: 'unsourced',
@@ -144,7 +144,7 @@ export const locations: LocationDef[] = [
     interactRadius: 2.2,
     actionLabel: 'Look up at the basilica',
     polaroidCaption: 'Everyone went quiet for a second. Then Huw said “wow” very loudly.',
-    shot: { position: { x: 68.5, y: 3.2, z: 4.7 }, target: { x: 68.5, y: 10, z: -2 } },
+    shot: { position: { x: 68.5, y: 19.5, z: 22 }, target: { x: 68.5, y: 10, z: -2 } },
     fact: {
       text: 'The Basílica de Santa María del Coro is a baroque church at the foot of Monte Urgull, at the end of Calle Mayor.',
       source: 'unsourced',

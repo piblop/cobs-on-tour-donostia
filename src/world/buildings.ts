@@ -218,6 +218,8 @@ function dressBuildings(defs: BuildingDef[], group: THREE.Group, resources: Arra
     add(shadows, b, 0, 0.028, 0, b.width + 2.6, 1, b.depth + 2.6, '#ffffff');
     if (b.kind === 'landmark') continue;
     for (const side of [-1, 1]) {
+      // The square's bespoke arcades replace the shop fittings on these faces.
+      if (b.kind === 'oldtown' && b.x > 75 && b.x < 82 && ((b.z < 2 && side === 1) || (b.z > 15 && side === -1))) continue;
       const bays = Math.max(1, Math.round(b.width / b.bay));
       const spacing = b.width / bays;
       const bw = Math.min(1.35, spacing * 0.7);
@@ -293,10 +295,14 @@ function dressBuildings(defs: BuildingDef[], group: THREE.Group, resources: Arra
 
 export function createBuildings(): BuildingMeshes {
   const defs = [...buildingLayout(), ...landmarkExtras()];
+  // Bespoke sight art replaces these visual masses; original definitions still
+  // drive collision and camera probes. The surrounding architecture is preserved.
+  const visualDefs = defs.filter((b) => !(b.kind === 'landmark' &&
+    ((b.x > 64 && b.x < 73 && b.z < 2) || (b.x > 85 && b.x < 92 && b.z > 15) || b.x < -30)));
   const rowWalls = new MeshBuilder();
   const oldWalls = new MeshBuilder();
   const roofs = new MeshBuilder();
-  for (const b of defs) {
+  for (const b of visualDefs) {
     const target = b.kind === 'oldtown' ? oldWalls : rowWalls;
     addWalls(target, b, PROMENADE_Y - 0.05);
     addRoof(roofs, b, PROMENADE_Y - 0.05);
@@ -314,7 +320,7 @@ export function createBuildings(): BuildingMeshes {
   group.name = 'buildings';
   const geometries: THREE.BufferGeometry[] = [];
   const details: Array<{ dispose(): void }> = [];
-  dressBuildings(defs, group, details);
+  dressBuildings(visualDefs, group, details);
   for (const [mb, mat] of [
     [rowWalls, rowMat],
     [oldWalls, oldMat],
